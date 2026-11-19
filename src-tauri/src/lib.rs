@@ -9,6 +9,7 @@ pub fn run() {
     window::prepare_hyprland();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_sql::Builder::new().add_migrations("sqlite:pad.db", db::migrations()).build())
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             cli::handle(&app, cli::parse(&args));
         }))

@@ -1,0 +1,18 @@
+/*
+ * T-007: the only place colours and spacing live. Components reference
+ * these tokens, so a later palette swap is a one-file change.
+ */
+:root {
+  --jot-bg: #1c1c1f;
+  --jot-fg: #e6e6e6;
+  --jot-muted: #8a8a93;
+  --jot-surface: #242428;
+  --jot-accent: #7aa2f7;
+  --jot-font: ui-monospace, "JetBrains Mono", "Fira Code", monospace;
+  --jot-font-size: 13px;
+  --jot-line-height: 1.5;
+  --jot-radius: 10px;
+  --jot-space: 12px;
+  --jot-padding: 16px;
+  --jot-border-width: 2px;
+}
