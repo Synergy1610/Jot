@@ -21,9 +21,21 @@ pub fn health_check(app: AppHandle) -> Result<Health, String> {
         .query_row("SELECT 1", [], |row| row.get(0))
         .map_err(|e| e.to_string())?;
 
-    Ok(Health {
+    let health = Health {
         ok: one == 1,
         db: one == 1,
         version: env!("CARGO_PKG_VERSION"),
-    })
+    };
+
+    // Skeleton-only: expose the result in the window title so the health
+    // round-trip is observable from outside the webview.
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_title(&format!(
+            "Jot | health {} | db {}",
+            if health.ok { "OK" } else { "FAIL" },
+            if health.db { "OK" } else { "FAIL" }
+        ));
+    }
+
+    Ok(health)
 }
