@@ -56,7 +56,11 @@ pub fn show_pad(app: AppHandle) -> Result<(), String> {
     let window = app
         .get_webview_window("main")
         .ok_or_else(|| "main window not found".to_string())?;
-    window::position_top_right(&window)?;
+    // A hidden window has no "current monitor" on Wayland, so show first and
+    // treat positioning as best-effort (Hyprland's window rule does the real
+    // placement).
     window.show().map_err(|e| e.to_string())?;
-    window.set_focus().map_err(|e| e.to_string())
+    let _ = window::position_top_right(&window);
+    window::focus_hyprland();
+    Ok(())
 }

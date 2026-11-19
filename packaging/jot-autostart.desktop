@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Jot
+Comment=Background service for the Jot hotkey
+Exec=jot --hidden
+Icon=jot
+Hidden=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

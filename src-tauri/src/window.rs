@@ -13,7 +13,7 @@ pub fn prepare_hyprland() {
         return;
     }
 
-    let rule = r#"hl.window_rule({ name="jot-placement", match={class="^jot$"}, float=true, move="(monitor_w-window_w-24) 24", no_initial_focus=true })"#;
+    let rule = r#"hl.window_rule({ name="jot-placement", match={class="^jot$"}, float=true, move="(monitor_w-window_w-24) 24" })"#;
     match std::process::Command::new("hyprctl")
         .args(["eval", rule])
         .output()
@@ -24,6 +24,38 @@ pub fn prepare_hyprland() {
             String::from_utf8_lossy(&output.stderr).trim()
         ),
         Err(error) => eprintln!("jot: could not run hyprctl: {error}"),
+    }
+}
+
+/// On Wayland a client cannot set input focus, so ask Hyprland to focus and
+/// raise the pad when it is summoned.
+pub fn focus_hyprland() {
+    if std::env::var("HYPRLAND_INSTANCE_SIGNATURE").is_err() {
+        return;
+    }
+    // Move the mouse into the pad so that, because Omarchy/Hyprland focus
+    // follows the mouse, the pad gets focused immediately.
+    let code = r#"local w=hl.get_window("class:jot"); if w then hl.dispatch(hl.dsp.focus({window=w})); hl.dispatch(hl.dsp.window.bring_to_top({window=w})); hl.dispatch(hl.dsp.cursor.move({x=w.at.x+w.size.x/2, y=w.at.y+w.size.y/2})) end"#;
+    for attempt in 1..=6 {
+        if let Err(error) = std::process::Command::new("hyprctl")
+            .args(["eval", code])
+            .output()
+        {
+            eprintln!("jot: could not run hyprctl: {error}");
+            return;
+        }
+        // The compositor may not have mapped the window yet on early tries.
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        if let Ok(output) = std::process::Command::new("hyprctl")
+            .args(["activewindow", "-j"])
+            .output()
+        {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if stdout.contains("\"class\": \"jot\"") || stdout.contains("\"class\":\"jot\"") {
+                return;
+            }
+        }
+        eprintln!("jot: focus attempt {attempt} did not land on the pad");
     }
 }
 

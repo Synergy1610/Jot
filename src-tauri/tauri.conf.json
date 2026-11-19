@@ -17,8 +17,8 @@
         "width": 480,
         "height": 320,
         "resizable": false,
-        "visible": true,
-        "focus": false,
+        "visible": false,
+        "focus": true,
         "alwaysOnTop": true,
         "skipTaskbar": true
       }

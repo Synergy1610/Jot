@@ -4,19 +4,17 @@ mod db;
 mod tray;
 mod window;
 
-use tauri::Manager;
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     window::prepare_hyprland();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            cli::handle(&app, cli::parse(&args));
+        }))
         .setup(|app| {
-            if let Some(window) = app.get_webview_window("main") {
-                if let Err(error) = window::position_top_right(&window) {
-                    eprintln!("jot: could not position window: {error}");
-                }
-            }
+            let args: Vec<String> = std::env::args().collect();
+            cli::handle(&app.handle(), cli::parse(&args));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
