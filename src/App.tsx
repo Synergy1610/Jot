@@ -28,6 +28,17 @@ export default function App() {
       });
   }, []);
 
+  // T-002: Escape only hides the pad; it never touches the text.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        void invoke("hide_pad");
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   return (
     <main className="shell">
       <header className="header">Jot · scaffold</header>

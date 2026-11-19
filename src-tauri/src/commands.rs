@@ -1,6 +1,7 @@
 //! Skeleton health check only: proves the Rust backend is alive and SQLite
 //! can be opened. No application features are implemented here.
 
+use crate::window;
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
 
@@ -38,4 +39,24 @@ pub fn health_check(app: AppHandle) -> Result<Health, String> {
     }
 
     Ok(health)
+}
+
+/// T-002: Escape hides the pad without changing any text.
+#[tauri::command]
+pub fn hide_pad(app: AppHandle) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "main window not found".to_string())?;
+    window.hide().map_err(|e| e.to_string())
+}
+
+/// T-002/T-003: re-position on the current monitor, show and focus the pad.
+#[tauri::command]
+pub fn show_pad(app: AppHandle) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "main window not found".to_string())?;
+    window::position_top_right(&window)?;
+    window.show().map_err(|e| e.to_string())?;
+    window.set_focus().map_err(|e| e.to_string())
 }
