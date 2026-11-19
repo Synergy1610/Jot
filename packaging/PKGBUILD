@@ -1,0 +1,22 @@
+# T-011: make this a real PKGBUILD once the release build works.
+# Skeleton placeholder — do not run makepkg yet.
+pkgname=jot
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="A summoned scratchpad"
+arch=('x86_64')
+url="https://example.invalid/jot"
+license=('MIT')
+depends=('webkit2gtk-4.1' 'gtk3' 'libayatana-appindicator')
+makedepends=('rust' 'pnpm' 'base-devel')
+source=()
+sha256sums=()
+
+build() {
+  cd "$srcdir"
+  msg2 "T-011: build and install the Tauri release here"
+}
+
+package() {
+  msg2 "T-011: install binary, desktop entry, autostart entry and icon"
+}

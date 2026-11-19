@@ -1,0 +1,2 @@
+-- T-005: create the local pad and settings tables here.
+-- Intentionally empty in the skeleton: no feature is implemented yet.
