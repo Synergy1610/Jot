@@ -37,8 +37,8 @@ makepkg -si     # Arch package — not functional until T-011
 Add to `~/.config/hypr/bindings.lua` (TODO(T-011): swap the dev path for `jot toggle` once packaged):
 
 ```lua
-hl.unbind("SUPER + J") -- replace Omarchy's "Toggle window split"
-o.bind("SUPER + J", "Jot scratchpad", "/home/soorya/Projects/jot/src-tauri/target/debug/jot toggle")
+o.bind("SUPER + W", "Jot scratchpad", "/home/soorya/Projects/jot/src-tauri/target/debug/jot toggle")
+o.bind("SUPER + J", "Toggle window split", hl.dsp.layout("togglesplit")) -- Omarchy default
 ```
 
 Apply with `hyprctl reload config-only`. The pad appears top-right; it has focus, and because Hyprland here focuses with the mouse we move the cursor into the pad on summon.

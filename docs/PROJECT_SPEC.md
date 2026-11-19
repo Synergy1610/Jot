@@ -179,7 +179,7 @@ Windows packaging verified in a VM, and in-app key capture.
 ### Assumptions
 
 - One user, one pad, one account, one personal machine.
-- Super+J is free in the user's Hyprland config; collisions are resolved at install time.
+- Super+W is the summon hotkey in the user's Hyprland config; collisions are resolved at install time.
 - The user supplies the Supabase project URL and anon key.
 - The pad is placed top-right on the focused monitor.
 

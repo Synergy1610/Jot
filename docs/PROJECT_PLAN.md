@@ -197,7 +197,7 @@ jot toggle | show | hide | quit
 ### Assumptions
 
 - One user, one pad, one account, one Linux machine.
-- `SUPER + J` remains free (verified at planning time).
+- `SUPER + W` is the chosen summon hotkey (user rebound it); Omarchy's default Super+J binding is restored to "Toggle window split".
 - The user supplies Supabase URL and anon key.
 - Top-right placement targets the focused monitor.
 - Placeholder palette is acceptable; final colours are later work.
