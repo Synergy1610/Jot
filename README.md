@@ -32,6 +32,33 @@ pnpm build      # Tauri release build
 makepkg -si     # Arch package — not functional until T-011
 ```
 
+## Hotkey setup (Hyprland)
+
+Add to `~/.config/hypr/bindings.lua` (TODO(T-011): swap the dev path for `jot toggle` once packaged):
+
+```lua
+hl.unbind("SUPER + J") -- replace Omarchy's "Toggle window split"
+o.bind("SUPER + J", "Jot scratchpad", "/home/soorya/Projects/jot/src-tauri/target/debug/jot toggle")
+```
+
+Apply with `hyprctl reload config-only`. The pad appears top-right; it has focus, and because Hyprland here focuses with the mouse we move the cursor into the pad on summon.
+
+## CLI (T-003)
+
+```
+jot toggle  # show if hidden, hide if visible
+jot show
+jot hide
+jot quit
+```
+
+`--hidden` starts the app without showing the window (autostart uses this).
+
+## Startup files (T-004)
+
+- Launcher entry: `~/.local/share/applications/jot.desktop` (TODO(T-011): `Exec=jot`)
+- Autostart: `~/.config/autostart/jot.desktop` (TODO(T-011): `Exec=jot --hidden`)
+
 ## Known desktop limitation
 
 On Hyprland/Wayland the compositor ignores GTK's "always on top" request, and Hyprland offers no always-above window rule. Jot therefore registers a Hyprland window rule at startup that floats the window and places it in the top-right corner with a 24px gap; the pad is raised whenever it is summoned by the hotkey, but another window can cover it until you summon it again. On X11 and Windows the normal always-on-top setting applies.
