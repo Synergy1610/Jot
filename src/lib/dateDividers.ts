@@ -1,54 +1,116 @@
-// T-006: append a dated divider once per local day when the pad is first opened.
+// T-006 / Option A: the date divider is a read-only header, not editor text.
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-/**
- * The plain-text divider format, e.g. "— Thu 19 Nov 2026 —".
- * Kept as plain text so the log stays fully inspectable.
- */
+const DIVIDER_RE =
+  /^\s*— ([A-Za-z]{3}) (\d{2}) ([A-Za-z]{3}) (\d{4}) —\s*$/;
+
+/** Display form, e.g. "— Thu 19 Nov 2026 —". */
 export function dividerForDate(d: Date = new Date()): string {
   const day = String(d.getDate()).padStart(2, "0");
   return `— ${WEEKDAYS[d.getDay()]} ${day} ${MONTHS[d.getMonth()]} ${d.getFullYear()} —`;
 }
 
-function dividerDateString(d: Date): string {
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${WEEKDAYS[d.getDay()]} ${day} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+/** ISO key used for comparisons/storage, e.g. "2026-11-19". */
+export function dividerKeyForDate(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-const DIVIDER_RE =
-  /^\s*— ([A-Za-z]{3}) (\d{2}) ([A-Za-z]{3}) (\d{4}) —\s*$/;
+/** Turn an ISO key back into the display form. */
+export function formatDividerKey(key: string): string {
+  const [year, month, day] = key.split("-").map(Number);
+  return dividerForDate(new Date(year, month - 1, day));
+}
 
-/** Returns the date string of the last divider anywhere in the text, if any. */
-export function lastDivider(text: string): string | null {
-  let last: string | null = null;
-  for (const line of text.split("\n")) {
-    const m = line.match(DIVIDER_RE);
-    if (m) {
-      last = `${m[1]} ${m[2]} ${m[3]} ${m[4]}`;
+/** Parse a divider line into its ISO key, or null when it isn't a divider. */
+export function parseDividerLine(line: string): string | null {
+  const m = line.trim().match(DIVIDER_RE);
+  if (!m) return null;
+  const monthIndex = MONTHS.indexOf(m[3]);
+  if (monthIndex < 0) return null;
+  return `${m[4]}-${String(monthIndex + 1).padStart(2, "0")}-${m[2]}`;
+}
+
+export type LogParts = {
+  archive: string;
+  body: string;
+  dividerKey: string | null;
+  dividerLine: string | null;
+};
+
+/**
+ * New-format log: archive, then the divider line, then today's editable body.
+ * Everything after the last divider belongs to the current day.
+ */
+export function parseNewLog(text: string): LogParts {
+  const lines = text.split("\n");
+  let lastIndex = -1;
+  let dividerKey: string | null = null;
+  let dividerLine: string | null = null;
+  for (let i = 0; i < lines.length; i++) {
+    const key = parseDividerLine(lines[i]);
+    if (key) {
+      lastIndex = i;
+      dividerKey = key;
+      dividerLine = lines[i].trim();
     }
   }
-  return last;
+  if (lastIndex === -1) {
+    return { archive: "", body: text.trim(), dividerKey: null, dividerLine: null };
+  }
+  return {
+    archive: lines.slice(0, lastIndex).join("\n").trim(),
+    body: lines.slice(lastIndex + 1).join("\n").trim(),
+    dividerKey,
+    dividerLine,
+  };
 }
 
 /**
- * Append today's divider when the document is non-empty and the last
- * divider is from another day or missing. Returns the text unchanged when a
- * divider for today already exists, so callers can skip the save.
+ * Legacy log: older versions appended the divider AFTER the user's text.
+ * Combine both sides of the divider so no text is lost during migration.
  */
-export function appendDividerIfNeeded(
-  text: string,
-  now: Date = new Date(),
+export function parseLegacyLog(text: string): {
+  body: string;
+  dividerKey: string | null;
+  dividerLine: string | null;
+} {
+  const lines = text.split("\n");
+  let lastIndex = -1;
+  let dividerKey: string | null = null;
+  let dividerLine: string | null = null;
+  for (let i = 0; i < lines.length; i++) {
+    const key = parseDividerLine(lines[i]);
+    if (key) {
+      lastIndex = i;
+      dividerKey = key;
+      dividerLine = lines[i].trim();
+    }
+  }
+  if (lastIndex === -1) {
+    return { body: text.trim(), dividerKey: null, dividerLine: null };
+  }
+  const before = lines.slice(0, lastIndex).join("\n").trim();
+  const after = lines.slice(lastIndex + 1).join("\n").trim();
+  return {
+    body: [before, after].filter(Boolean).join("\n").trim(),
+    dividerKey,
+    dividerLine,
+  };
+}
+
+/** Rebuild the full stored log from its parts. */
+export function buildFullContent(
+  archive: string,
+  dividerLine: string,
+  body: string,
 ): string {
-  const today = dividerDateString(now);
-  if (lastDivider(text) === today) {
-    return text;
-  }
-  if (text.trim().length === 0) {
-    return text;
-  }
-  const separator = text.endsWith("\n") ? "" : "\n";
-  return `${text}${separator}${dividerForDate(now)}\n`;
+  const parts: string[] = [];
+  if (archive.trim()) parts.push(archive.trim());
+  parts.push(dividerLine);
+  parts.push("");
+  if (body.trim()) parts.push(body.trim());
+  return parts.join("\n");
 }

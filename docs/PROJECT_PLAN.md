@@ -44,7 +44,7 @@ Local environment at planning time: Node v26.13.1; `rustc`/`cargo` absent; pnpm 
 
 Scaffold, window behaviour, CLI and single instance, Hyprland binding and autostart, SQLite autosave, date dividers, pad UI, settings panel, clear/undo, tray-or-fallback, Arch package.
 
-**Done when:** with no account and no network, Super+J summons the pad; text survives restarts; dividers appear daily; settings reports binding status accurately; `makepkg -si` installs a working app.
+**Done when:** with no account and no network, Super+W summons the pad; text survives restarts; the read-only divider header is always present before the text; settings reports binding status accurately; `makepkg -si` installs a working app.
 
 ### M2 — Cloud backup
 
@@ -103,9 +103,9 @@ Document and install the `o.bind("SUPER + J", "Jot", "jot toggle")` snippet for 
 SQLite migrations for `pad` and `settings`; load on startup; 300ms debounced writes; expose the database path for About. No cloud calls.
 *Accept:* text survives kill/relaunch; writes are debounced rather than per keystroke; database path is available to the UI.
 
-**T-006 — Date dividers** *(S, T-005)*
-On first open of a new local day, append `— Thu 19 Nov 2026 —` if the document is non-empty and the last divider is from an earlier day; cursor after the divider.
-*Accept:* simulated day change appends exactly one divider; same-day reopen adds none; divider is plain text and editable.
+**T-006 — Date dividers (Option A)** *(S, T-005)*
+Store `divider_date` in the local settings table; render `— Thu 19 Nov 2026 —` as a fixed, read-only header above the textarea; keep it out of the editable body. On a new day, archive the old section and start fresh; migrate legacy divider-after-text content without loss.
+*Accept:* header is present before typing; it cannot be deleted from the editor; select-all/delete on the body leaves the header intact; legacy content is preserved; one header per day.
 
 **T-007 — Pad UI and tokens** *(M, T-002, T-005)*
 Header with date, status, gear; styled scrollable text area; focus cursor at end; empty-state placeholder; one token module for colour, spacing, radii, type.

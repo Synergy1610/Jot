@@ -51,7 +51,7 @@ Single user (the project owner). No public signup, no sharing, no collaborators.
 
 10. Plain text only. No formatting, attachments, titles, or metadata in the text.
 11. Every change is written to local storage within ~300ms. There is no save button and no dirty-state dialog.
-12. The document is a single running log. On the first open of a new local day, if the document is non-empty, append a dated divider (`— Thu 19 Nov 2026 —`) at the end and place the cursor after it. Dividers are inserted once per day and are plain text.
+12. **Approved change (Option A):** the date divider (`— Thu 19 Nov 2026 —`) is a **read-only header** above the textarea, stored as a `divider_date` setting in SQLite. The editable text contains only what you type. The header is present on first open even when the pad is empty, appears before the text, and cannot be deleted. Older days are preserved in the archive portion of the local log; on a new day the archive is advanced and a fresh header is shown.
 13. The pad has a slim header showing the current date, a status indicator, and a gear icon that opens the settings panel.
 14. The status indicator reflects reality: **Saved** (local only), **Synced**, **Syncing**, **Offline**, **Signed out**, **Error**.
 
@@ -164,8 +164,9 @@ Windows packaging verified in a VM, and in-app key capture.
 
 ## 9. Acceptance criteria for v1
 
-- From a cold boot, Super+J puts a focused pad at the top-right in under a second.
-- Type, press Escape, reboot, press Super+J: the text is intact.
+- From a cold boot, Super+W puts a focused pad at the top-right in under a second.
+- Type, press Escape, reboot, press Super+W: the text is intact.
+- The read-only date header is present before typing and survives deleting all editable text.
 - Disconnect the network, type, reconnect: status moves Offline → Syncing → Synced and nothing is lost.
 - Signed out, the app makes no network requests and remains fully usable.
 - Signing in on a fresh install pulls the cloud copy, or offers the one-time choice rather than overwriting.

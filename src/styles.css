@@ -59,10 +59,20 @@ body {
   background: var(--jot-bg);
 }
 
+/* T-006 Option A: read-only date header, outside the textarea. */
+.day-divider {
+  padding: var(--jot-space) var(--jot-padding) 0;
+  color: var(--jot-muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  user-select: none;
+  pointer-events: none;
+}
+
 .textarea {
   flex: 1;
   overflow-y: auto;
-  padding: var(--jot-padding);
+  padding: 8px var(--jot-padding) var(--jot-padding);
   background: transparent;
   border: none;
   outline: none;

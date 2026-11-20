@@ -17,6 +17,7 @@ function displayDate(): string {
 
 export default function App() {
   const [content, setContent] = useState("");
+  const [divider, setDivider] = useState("");
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [headerDate] = useState(displayDate);
@@ -43,7 +44,10 @@ export default function App() {
       });
 
     loadPad().then((text) => {
-      if (!disposed) setContent(text);
+      if (!disposed) {
+        setContent(text);
+        setDivider(getPadState().divider);
+      }
       setTimeout(() => textareaRef.current?.focus(), 50);
     });
 
@@ -99,6 +103,9 @@ export default function App() {
           ⚙
         </button>
       </header>
+      <div className="day-divider" data-testid="day-divider">
+        {divider}
+      </div>
       <textarea
         ref={textareaRef}
         className="textarea"
