@@ -23,7 +23,7 @@ body {
   justify-content: space-between;
   padding: var(--jot-space) var(--jot-padding);
   background: var(--jot-surface);
-  border-bottom: 1px solid var(--jot-fg, transparent);
+  border-bottom: 1px solid var(--jot-dim);
 }
 
 .header-date {
@@ -87,6 +87,13 @@ body {
 
 .textarea::placeholder {
   color: var(--jot-muted);
+  opacity: 0.7;
+}
+
+.textarea::selection,
+.settings-panel ::selection {
+  background: var(--jot-selection);
+  color: var(--jot-fg);
 }
 
 /* T-008: settings panel overlay. */
@@ -123,7 +130,7 @@ body {
 .settings-section {
   margin-bottom: var(--jot-space);
   padding-bottom: var(--jot-space);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--jot-dim);
 }
 
 .settings-section h3 {
@@ -148,7 +155,7 @@ body {
 }
 
 .settings-warn {
-  color: #e0af68;
+  color: var(--jot-warning);
   margin: 6px 0 2px;
 }
 

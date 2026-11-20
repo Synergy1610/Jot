@@ -1,13 +1,22 @@
 /*
- * T-007: the only place colours and spacing live. Components reference
- * these tokens, so a later palette swap is a one-file change.
+ * Last Horizon (Omarchy) palette, sourced from:
+ * /usr/share/omarchy/themes/last-horizon/colors.toml
+ * Kept as the single token file so a future theme swap is one edit.
  */
 :root {
-  --jot-bg: #1c1c1f;
-  --jot-fg: #e6e6e6;
-  --jot-muted: #8a8a93;
-  --jot-surface: #242428;
-  --jot-accent: #7aa2f7;
+  --jot-bg: #0c0b0c; /* background */
+  --jot-bg-dark: #090809; /* dark_background */
+  --jot-surface: #090809; /* dark_background — header/settings */
+  --jot-fg: #FAFCFB; /* foreground */
+  --jot-fg-light: #cfd3cd; /* light_foreground */
+  --jot-muted: #b59790; /* accent — readable secondary text */
+  --jot-dim: #584e51; /* theme muted — borders, quiet lines */
+  --jot-accent: #b59790; /* accent */
+  --jot-selection: #584e51; /* selection */
+  --jot-warning: #c38b7b; /* red / bright_red */
+  --jot-cyan: #87a9b0; /* green / bright_green */
+  --jot-magenta: #c4d8e2; /* bright_magenta */
+
   --jot-font: ui-monospace, "JetBrains Mono", "Fira Code", monospace;
   --jot-font-size: 13px;
   --jot-line-height: 1.5;
