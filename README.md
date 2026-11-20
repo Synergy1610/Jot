@@ -32,12 +32,22 @@ pnpm build      # Tauri release build
 makepkg -si     # Arch package — not functional until T-011
 ```
 
+## Install (Arch package)
+
+```
+cd packaging
+makepkg -si
+sudo pacman -U jot-0.1.0-1-x86_64.pkg.tar.zst   # if built without -i
+```
+
+The package installs `jot`, a launcher entry, and an autostart entry. After installing, change the binding below from the dev path to `jot toggle`.
+
 ## Hotkey setup (Hyprland)
 
-Add to `~/.config/hypr/bindings.lua` (TODO(T-011): swap the dev path for `jot toggle` once packaged):
+Add to `~/.config/hypr/bindings.lua`:
 
 ```lua
-o.bind("SUPER + W", "Jot scratchpad", "/home/soorya/Projects/jot/src-tauri/target/debug/jot toggle")
+o.bind("SUPER + W", "Jot scratchpad", "jot toggle")
 o.bind("SUPER + J", "Toggle window split", hl.dsp.layout("togglesplit")) -- Omarchy default
 ```
 

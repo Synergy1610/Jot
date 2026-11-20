@@ -126,3 +126,15 @@ fn show_window(app: &AppHandle) {
 pub fn _window_exists(window: Option<&WebviewWindow>) -> bool {
     window.is_some()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hotkey_info_has_canonical_snippet_and_config_path() {
+        let info = get_hotkey_info();
+        assert_eq!(info.snippet, HOTKEY_SNIPPET);
+        assert!(info.config_path.ends_with(".config/hypr/bindings.lua"));
+    }
+}
