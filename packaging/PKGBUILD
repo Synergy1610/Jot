@@ -17,6 +17,10 @@ build() {
   # pnpm may come from mise on this machine; ensure its shims are visible.
   export PATH="$HOME/.local/share/mise/shims:$PATH"
 
+  # makepkg's hardened CFLAGS break sqlx-macros' proc-macro dylib (undefined
+  # sqlite3_value_type). Rust handles its own flags; don't pass CFLAGS through.
+  unset CFLAGS CXXFLAGS LDFLAGS
+
   pnpm install --frozen-lockfile
   pnpm build:vite
   cargo build --release --locked --manifest-path src-tauri/Cargo.toml
