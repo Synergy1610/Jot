@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { dividerForDate } from "./lib/dateDividers";
 import { getPadState, loadPad, onContentChange, setOnSave } from "./lib/store";
@@ -15,6 +15,45 @@ function displayDate(): string {
   return dividerForDate().slice(1, -1).trim();
 }
 
+/** A small icon badge with a tick and a native hover tooltip. */
+function StatusBadge({
+  active,
+  title,
+  children,
+}: {
+  active: boolean;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <span
+      className={`status-icon${active ? " active" : ""}`}
+      title={title}
+      data-testid={title}
+    >
+      {children}
+      {active && <span className="badge-tick">✓</span>}
+    </span>
+  );
+}
+
+function MonitorIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="2" y="3" width="20" height="14" rx="2" />
+      <path d="M8 21h8M12 17v4" />
+    </svg>
+  );
+}
+
+function CloudIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6.5 19a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 17.4 9.2 4 4 0 0 1 18 19H6.5Z" />
+    </svg>
+  );
+}
+
 export default function App() {
   const [content, setContent] = useState("");
   const [divider, setDivider] = useState("");
@@ -23,6 +62,7 @@ export default function App() {
   const [headerDate] = useState(displayDate);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [dbPath, setDbPath] = useState("");
+  const [dirty, setDirty] = useState(false);
   const settingsOpenRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -60,6 +100,7 @@ export default function App() {
     });
 
     setOnSave(() => {
+      setDirty(false);
       if (!getPadState().dirty) setError(null);
     });
 
@@ -80,20 +121,25 @@ export default function App() {
     };
   }, []);
 
-  const status = error
-    ? "Error"
-    : health && !health.ok
-      ? "Error"
-      : getPadState().dirty
-        ? "Saved locally"
-        : "Saved";
+  const localSaved = !dirty && !error && health?.db !== false;
+  const localTitle = error
+    ? "Local save failed"
+    : dirty
+      ? "Saving on this device…"
+      : "Saved on this device";
+  const cloudTitle = "Cloud backup is off — sign in to enable";
 
   return (
     <div className="pad">
       <header className="header">
         <span className="header-date">{headerDate}</span>
-        <span className="status" data-testid="status">
-          {status}
+        <span className="status-icons">
+          <StatusBadge active={localSaved} title={localTitle}>
+            <MonitorIcon />
+          </StatusBadge>
+          <StatusBadge active={false} title={cloudTitle}>
+            <CloudIcon />
+          </StatusBadge>
         </span>
         <button
           className="gear"
@@ -112,7 +158,10 @@ export default function App() {
         value={content}
         placeholder="Start typing…"
         autoFocus
-        onChange={(event) => setContent(onContentChange(event.target.value))}
+        onChange={(event) => {
+          setDirty(true);
+          setContent(onContentChange(event.target.value));
+        }}
       />
       <SettingsPanel
         open={settingsOpen}

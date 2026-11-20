@@ -4,7 +4,7 @@
  * Kept as the single token file so a future theme swap is one edit.
  */
 :root {
-  --jot-bg: #0c0b0c; /* background */
+  --jot-bg: #000000; /* main body: black (accent colors stay theme-based) */
   --jot-bg-dark: #090809; /* dark_background */
   --jot-surface: #090809; /* dark_background — header/settings */
   --jot-fg: #FAFCFB; /* foreground */

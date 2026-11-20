@@ -53,7 +53,7 @@ Single user (the project owner). No public signup, no sharing, no collaborators.
 11. Every change is written to local storage within ~300ms. There is no save button and no dirty-state dialog.
 12. **Approved change (Option A):** the date divider (`— Thu 19 Nov 2026 —`) is a **read-only header** above the textarea, stored as a `divider_date` setting in SQLite. The editable text contains only what you type. The header is present on first open even when the pad is empty, appears before the text, and cannot be deleted. Older days are preserved in the archive portion of the local log; on a new day the archive is advanced and a fresh header is shown.
 13. The pad has a slim header showing the current date, a status indicator, and a gear icon that opens the settings panel.
-14. The status indicator reflects reality: **Saved** (local only), **Synced**, **Syncing**, **Offline**, **Signed out**, **Error**.
+14. The header status is shown as two icon badges, not text: **computer + tick** for "saved on this device" and **cloud + tick** for "backed up to the cloud". Each has a hover tooltip explaining its meaning. In v1 the cloud badge is inactive with the tooltip "Cloud backup is off — sign in to enable"; it becomes active when M2 sync lands. Error and in-progress states are conveyed by the computer badge's colour/tick state and tooltip.
 
 ### 3.3 Settings panel
 

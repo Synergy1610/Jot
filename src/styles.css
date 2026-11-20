@@ -31,10 +31,41 @@ body {
   color: var(--jot-muted);
 }
 
-.status {
-  font-size: 12px;
-  color: var(--jot-muted);
+.status-icons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0 var(--jot-space);
+}
+
+.status-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--jot-dim);
+  cursor: help;
+  line-height: 0;
+}
+
+.status-icon.active {
+  color: var(--jot-muted);
+}
+
+.status-icon svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.badge-tick {
+  color: var(--jot-accent);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .gear {
