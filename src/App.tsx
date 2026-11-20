@@ -72,6 +72,12 @@ export default function App() {
 
   useEffect(() => {
     let disposed = false;
+    // Re-focus on every summon: a window launched hidden never established
+    // DOM focus, and focus can also be lost while the pad is hidden.
+    const focusPad = () => {
+      textareaRef.current?.focus();
+      setTimeout(() => textareaRef.current?.focus(), 80);
+    };
 
     invoke<Health>("health_check")
       .then((result) => {
@@ -88,16 +94,18 @@ export default function App() {
         setContent(text);
         setDivider(getPadState().divider);
       }
-      setTimeout(() => textareaRef.current?.focus(), 50);
+      setTimeout(focusPad, 50);
     });
 
     invoke<string>("get_db_path")
       .then(setDbPath)
       .catch(() => setDbPath("unknown"));
 
-    const unlisten = listen("jot://open-settings", () => {
+    const unlistenSettings = listen("jot://open-settings", () => {
       setSettingsOpen(true);
     });
+    const unlistenFocus = listen("jot://focus", focusPad);
+    window.addEventListener("focus", focusPad);
 
     setOnSave(() => {
       setDirty(false);
@@ -116,7 +124,9 @@ export default function App() {
     window.addEventListener("keydown", onKeyDown);
     return () => {
       disposed = true;
-      void unlisten.then((fn) => fn());
+      void unlistenSettings.then((fn) => fn());
+      void unlistenFocus.then((fn) => fn());
+      window.removeEventListener("focus", focusPad);
       window.removeEventListener("keydown", onKeyDown);
     };
   }, []);

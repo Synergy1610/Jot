@@ -3,7 +3,7 @@
 
 use crate::window;
 use serde::Serialize;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -62,5 +62,8 @@ pub fn show_pad(app: AppHandle) -> Result<(), String> {
     window.show().map_err(|e| e.to_string())?;
     let _ = window::position_top_right(&window);
     window::focus_hyprland();
+    // The webview may have been hidden since startup, so its DOM focus was
+    // never established (or was lost). Ask the UI to re-focus the textarea.
+    let _ = app.emit("jot://focus", ());
     Ok(())
 }
