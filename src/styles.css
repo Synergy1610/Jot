@@ -78,3 +78,99 @@ body {
 .textarea::placeholder {
   color: var(--jot-muted);
 }
+
+/* T-008: settings panel overlay. */
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.settings-panel {
+  width: 440px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--jot-surface);
+  color: var(--jot-fg);
+  border-radius: var(--jot-radius);
+  padding: var(--jot-padding);
+  font-size: 12px;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--jot-muted);
+  padding-bottom: var(--jot-space);
+  margin-bottom: var(--jot-space);
+}
+
+.settings-section {
+  margin-bottom: var(--jot-space);
+  padding-bottom: var(--jot-space);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.settings-section h3 {
+  margin: 0 0 6px 0;
+  font-size: 12px;
+}
+
+.settings-muted {
+  color: var(--jot-muted);
+  line-height: var(--jot-line-height);
+  margin: 4px 0;
+}
+
+.settings-small {
+  font-size: 10px;
+  word-break: break-all;
+}
+
+.settings-ok {
+  color: var(--jot-accent);
+  margin: 6px 0 2px;
+}
+
+.settings-warn {
+  color: #e0af68;
+  margin: 6px 0 2px;
+}
+
+.hotkey-snippet {
+  display: block;
+  background: var(--jot-bg);
+  padding: 8px;
+  border-radius: 6px;
+  font-family: var(--jot-font);
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.settings-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.settings-row button {
+  background: var(--jot-bg);
+  color: var(--jot-fg);
+  border: 1px solid var(--jot-muted);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.settings-row button:hover {
+  border-color: var(--jot-accent);
+}

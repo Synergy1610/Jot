@@ -3,5 +3,13 @@
   "identifier": "default",
   "description": "Default capability for the jot window",
   "windows": ["main"],
-  "permissions": ["core:default", "sql:allow-load", "sql:allow-execute", "sql:allow-select"]
+  "permissions": [
+    "core:default",
+    "core:tray:allow-new",
+    "core:tray:allow-set-menu",
+    "core:tray:allow-set-icon",
+    "sql:allow-load",
+    "sql:allow-execute",
+    "sql:allow-select"
+  ]
 }

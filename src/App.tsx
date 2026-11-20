@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
+import { SettingsPanel } from "./components/SettingsPanel";
 import { dividerForDate } from "./lib/dateDividers";
 import { getPadState, loadPad, onContentChange, setOnSave } from "./lib/store";
 
@@ -10,7 +12,6 @@ type Health = {
 };
 
 function displayDate(): string {
-  // "Thu 19 Nov 2026" — strips the leading dash and trailing dash of the divider form.
   return dividerForDate().slice(1, -1).trim();
 }
 
@@ -19,7 +20,14 @@ export default function App() {
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [headerDate] = useState(displayDate);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [dbPath, setDbPath] = useState("");
+  const settingsOpenRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    settingsOpenRef.current = settingsOpen;
+  }, [settingsOpen]);
 
   useEffect(() => {
     let disposed = false;
@@ -36,37 +44,45 @@ export default function App() {
 
     loadPad().then((text) => {
       if (!disposed) setContent(text);
-      // Focus the pad and place the cursor at the end when it is summoned.
       setTimeout(() => textareaRef.current?.focus(), 50);
     });
 
+    invoke<string>("get_db_path")
+      .then(setDbPath)
+      .catch(() => setDbPath("unknown"));
+
+    const unlisten = listen("jot://open-settings", () => {
+      setSettingsOpen(true);
+    });
+
     setOnSave(() => {
-      const state = getPadState();
-      if (!state.dirty) {
-        setError(null);
-      }
+      if (!getPadState().dirty) setError(null);
     });
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        void invoke("hide_pad");
+        if (settingsOpenRef.current) {
+          setSettingsOpen(false);
+        } else {
+          void invoke("hide_pad");
+        }
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => {
       disposed = true;
+      void unlisten.then((fn) => fn());
       window.removeEventListener("keydown", onKeyDown);
     };
   }, []);
 
-  const status =
-    error
+  const status = error
+    ? "Error"
+    : health && !health.ok
       ? "Error"
-      : health && !health.ok
-        ? "Error"
-        : getPadState().dirty
-          ? "Saved locally"
-          : "Saved";
+      : getPadState().dirty
+        ? "Saved locally"
+        : "Saved";
 
   return (
     <div className="pad">
@@ -75,7 +91,11 @@ export default function App() {
         <span className="status" data-testid="status">
           {status}
         </span>
-        <button className="gear" aria-label="Settings">
+        <button
+          className="gear"
+          aria-label="Settings"
+          onClick={() => setSettingsOpen(true)}
+        >
           ⚙
         </button>
       </header>
@@ -86,6 +106,13 @@ export default function App() {
         placeholder="Start typing…"
         autoFocus
         onChange={(event) => setContent(onContentChange(event.target.value))}
+      />
+      <SettingsPanel
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        version={health?.version ?? "0.1.0"}
+        dbPath={dbPath}
+        onContentChanged={setContent}
       />
     </div>
   );

@@ -1,22 +1,32 @@
-# T-011: make this a real PKGBUILD once the release build works.
-# Skeleton placeholder — do not run makepkg yet.
+# Maintainer: soorya <sooryakiran.edathadan@gmail.com>
 pkgname=jot
 pkgver=0.1.0
 pkgrel=1
 pkgdesc="A summoned scratchpad"
 arch=('x86_64')
-url="https://example.invalid/jot"
+url="https://github.com/Synergy1610/Jot"
 license=('MIT')
-depends=('webkit2gtk-4.1' 'gtk3' 'libayatana-appindicator')
-makedepends=('rust' 'pnpm' 'base-devel')
-source=()
-sha256sums=()
+depends=('webkit2gtk-4.1' 'gtk3' 'libsoup3' 'librsvg' 'libayatana-appindicator')
+makedepends=('git' 'rust' 'pnpm' 'base-devel')
+source=("$pkgname"::"git+file:///home/soorya/Projects/jot")
+sha256sums=('SKIP')
 
 build() {
-  cd "$srcdir"
-  msg2 "T-011: build and install the Tauri release here"
+  cd "$srcdir/$pkgname"
+
+  # pnpm may come from mise on this machine; ensure its shims are visible.
+  export PATH="$HOME/.local/share/mise/shims:$PATH"
+
+  pnpm install --frozen-lockfile
+  pnpm build:vite
+  cargo build --release --locked --manifest-path src-tauri/Cargo.toml
 }
 
 package() {
-  msg2 "T-011: install binary, desktop entry, autostart entry and icon"
+  cd "$srcdir/$pkgname"
+
+  install -Dm755 src-tauri/target/release/jot "$pkgdir/usr/bin/jot"
+  install -Dm644 packaging/jot.desktop "$pkgdir/usr/share/applications/jot.desktop"
+  install -Dm644 packaging/jot-autostart.desktop "$pkgdir/etc/xdg/autostart/jot.desktop"
+  install -Dm644 src-tauri/icons/128x128.png "$pkgdir/usr/share/icons/hicolor/128x128/apps/jot.png"
 }

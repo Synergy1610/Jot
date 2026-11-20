@@ -110,3 +110,38 @@ export function onContentChange(text: string): string {
   scheduleSave();
   return text;
 }
+
+/** T-009: wipe the local pad and stash the old text for one undo. */
+export async function clearPad(): Promise<void> {
+  const sqlDb = await getDb();
+  await sqlDb.execute(
+    "INSERT INTO settings (key, value) VALUES ('last_cleared', ?) " +
+      "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+    [state.content],
+  );
+  await savePad("");
+}
+
+/** T-009: restore the most recently cleared text; false when nothing to undo. */
+export async function undoClear(): Promise<boolean> {
+  const sqlDb = await getDb();
+  const rows = await sqlDb.select<Array<{ value: string }>>(
+    "SELECT value FROM settings WHERE key = 'last_cleared'",
+  );
+  if (rows.length === 0) return false;
+  await sqlDb.execute("DELETE FROM settings WHERE key = 'last_cleared'");
+  await savePad(rows[0].value);
+  return true;
+}
+
+export async function canUndoClear(): Promise<boolean> {
+  try {
+    const sqlDb = await getDb();
+    const rows = await sqlDb.select<Array<{ value: string }>>(
+      "SELECT value FROM settings WHERE key = 'last_cleared'",
+    );
+    return rows.length > 0;
+  } catch {
+    return false;
+  }
+}
