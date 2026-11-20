@@ -22,8 +22,9 @@ build() {
   unset CFLAGS CXXFLAGS LDFLAGS
 
   pnpm install --frozen-lockfile
-  pnpm build:vite
-  cargo build --release --locked --manifest-path src-tauri/Cargo.toml
+  # tauri build enables the custom-protocol feature so the UI is embedded;
+  # plain cargo build --release leaves devUrl in the binary.
+  pnpm tauri build
 }
 
 package() {
