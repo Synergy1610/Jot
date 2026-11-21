@@ -179,6 +179,14 @@ export function onContentChange(text: string): string {
   return text;
 }
 
+/** Edit earlier days in place; the read-only dividers are left untouched. */
+export function onArchiveChange(text: string): string {
+  archive = text;
+  state.archive = text;
+  scheduleSave();
+  return text;
+}
+
 /** T-009: wipe today's body and stash it for one undo. */
 export async function clearPad(): Promise<void> {
   const sqlDb = await getDb();

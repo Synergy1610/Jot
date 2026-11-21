@@ -120,20 +120,24 @@ body {
   background: var(--jot-bg);
 }
 
-/* Earlier days stay visible above today's divider, read-only and scrollable. */
+/* Earlier days stay visible above today's divider and are editable in place. */
 .archive {
   flex: 0 1 auto;
   max-height: 45%;
   overflow-y: auto;
   padding: var(--jot-space) var(--jot-padding) 6px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--jot-dim);
+  outline: none;
+  resize: none;
   color: var(--jot-fg-light);
   opacity: 0.8;
   font: inherit;
   line-height: var(--jot-line-height);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  user-select: text;
-  border-bottom: 1px solid var(--jot-dim);
+  caret-color: var(--jot-accent);
 }
 
 /* T-006 Option A: read-only date header, outside the textarea. */

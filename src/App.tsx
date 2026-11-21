@@ -3,7 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { dividerForDate } from "./lib/dateDividers";
-import { getPadState, loadPad, onContentChange, setOnSave } from "./lib/store";
+import { getPadState, loadPad, onArchiveChange, onContentChange, setOnSave } from "./lib/store";
 
 type Health = {
   ok: boolean;
@@ -67,6 +67,7 @@ export default function App() {
   const [dirty, setDirty] = useState(false);
   const settingsOpenRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const archiveRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     settingsOpenRef.current = settingsOpen;
@@ -163,9 +164,17 @@ export default function App() {
         </button>
       </header>
       {archive && (
-        <div className="archive" data-testid="archive">
-          {archive}
-        </div>
+        <textarea
+          ref={archiveRef}
+          className="archive"
+          data-testid="archive"
+          aria-label="Earlier days"
+          value={archive}
+          onChange={(event) => {
+            setDirty(true);
+            setArchive(onArchiveChange(event.target.value));
+          }}
+        />
       )}
       <div className="day-divider" data-testid="day-divider">
         {divider}
