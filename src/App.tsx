@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
+  Fragment,
   useEffect,
   useRef,
   useState,
@@ -23,6 +24,28 @@ type Health = {
 
 function displayDate(): string {
   return dividerForDate().slice(1, -1).trim();
+}
+
+const TAG_RE = /^(.*?)(\s*·\s*\d{1,2}\s+[A-Za-z]{3}\s+\d{4})$/;
+
+/** Mirror the editable text with date tags wrapped in coloured spans. */
+function mirrorContent(text: string) {
+  return text.split("\n").map((line, index) => {
+    const match = TAG_RE.exec(line);
+    return (
+      <Fragment key={index}>
+        {index > 0 ? "\n" : null}
+        {match ? (
+          <>
+            <span>{match[1]}</span>
+            <span className="date-tag">{match[2]}</span>
+          </>
+        ) : (
+          line
+        )}
+      </Fragment>
+    );
+  });
 }
 
 /** A small icon badge with a tick and a hover tooltip. */
@@ -75,6 +98,7 @@ export default function App() {
   const [dirty, setDirty] = useState(false);
   const settingsOpenRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mirrorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     settingsOpenRef.current = settingsOpen;
@@ -188,21 +212,31 @@ export default function App() {
           ⚙
         </button>
       </header>
-      <textarea
-        ref={textareaRef}
-        className="textarea"
-        data-testid="pad"
-        value={content}
-        placeholder="Start typing…"
-        autoFocus
-        onChange={(event) => {
-          setDirty(true);
-          setContent(onContentChange(event.target.value));
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") onEnter(event);
-        }}
-      />
+      <div className="editor">
+        <div className="editor-mirror" ref={mirrorRef} aria-hidden="true">
+          {content ? mirrorContent(content) : null}
+        </div>
+        <textarea
+          ref={textareaRef}
+          className="textarea"
+          data-testid="pad"
+          value={content}
+          placeholder="Start typing…"
+          autoFocus
+          onChange={(event) => {
+            setDirty(true);
+            setContent(onContentChange(event.target.value));
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") onEnter(event);
+          }}
+          onScroll={(event) => {
+            if (mirrorRef.current) {
+              mirrorRef.current.scrollTop = event.currentTarget.scrollTop;
+            }
+          }}
+        />
+      </div>
       <SettingsPanel
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}

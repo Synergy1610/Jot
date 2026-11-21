@@ -15,6 +15,8 @@
   --jot-selection: #584e51; /* selection */
   --jot-warning: #c38b7b; /* red / bright_red */
   --jot-cyan: #87a9b0; /* green / bright_green */
+  --jot-tag: #87a9b0; /* green / bright_green — inline date tags */
+  --jot-info: #c4d8e2; /* bright_magenta — light blue for settings */
   --jot-magenta: #c4d8e2; /* bright_magenta */
 
   --jot-font: ui-monospace, "JetBrains Mono", "Fira Code", monospace;

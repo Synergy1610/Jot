@@ -1,9 +1,11 @@
 @import "./theme/tokens.css";
 
 html,
-body {
+body,
+#root {
   margin: 0;
   padding: 0;
+  height: 100%;
 }
 
 body {
@@ -12,6 +14,15 @@ body {
   color: var(--jot-fg);
   background: var(--jot-bg);
   height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Without this, #root only grows to its content and the pad never fills
+   the window (so only the top part scrolls). */
+#root {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
@@ -120,24 +131,58 @@ body {
   background: var(--jot-bg);
 }
 
-/* One continuous editor: all days and their small inline date tags. */
-.textarea {
+/* One continuous editor. A mirrored layer behind the transparent textarea
+   lets the inline date tags use their own colour while editing stays plain
+   text with native selection and caret. */
+.editor {
+  position: relative;
   flex: 1;
-  overflow-y: auto;
+  min-height: 0;
+}
+
+.editor-mirror,
+.textarea {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
   padding: var(--jot-space) var(--jot-padding) var(--jot-padding);
-  background: transparent;
-  border: none;
-  outline: none;
-  resize: none;
-  color: var(--jot-fg);
+  margin: 0;
   font: inherit;
   line-height: var(--jot-line-height);
   white-space: pre-wrap;
   overflow-wrap: break-word;
-  caret-color: var(--jot-fg);
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+  scrollbar-color: var(--jot-dim) transparent;
+  border: none;
+  background: transparent;
+}
+
+.editor-mirror {
+  color: var(--jot-fg);
+  pointer-events: none;
+  scrollbar-color: transparent transparent;
+}
+
+.textarea {
+  outline: none;
+  resize: none;
+  color: transparent;
+  caret-color: var(--jot-accent);
 }
 
 .textarea::placeholder {
+  color: var(--jot-muted);
+  opacity: 0.7;
+}
+
+.date-tag {
+  color: var(--jot-tag);
+}
+
+.mirror-placeholder {
   color: var(--jot-muted);
   opacity: 0.7;
 }
@@ -174,7 +219,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--jot-muted);
+  border-bottom: 1px solid var(--jot-info);
   padding-bottom: var(--jot-space);
   margin-bottom: var(--jot-space);
 }
@@ -188,6 +233,7 @@ body {
 .settings-section h3 {
   margin: 0 0 6px 0;
   font-size: 12px;
+  color: var(--jot-info);
 }
 
 .settings-muted {
@@ -202,7 +248,7 @@ body {
 }
 
 .settings-ok {
-  color: var(--jot-accent);
+  color: var(--jot-info);
   margin: 6px 0 2px;
 }
 
@@ -216,6 +262,8 @@ body {
   background: var(--jot-bg);
   padding: 8px;
   border-radius: 6px;
+  border-left: 2px solid var(--jot-info);
+  color: var(--jot-info);
   font-family: var(--jot-font);
   font-size: 11px;
   word-break: break-all;
@@ -241,5 +289,6 @@ body {
 }
 
 .settings-row button:hover {
-  border-color: var(--jot-accent);
+  border-color: var(--jot-info);
+  color: var(--jot-info);
 }
