@@ -48,7 +48,7 @@ function mirrorContent(text: string) {
   });
 }
 
-/** A small icon badge with a tick and a hover tooltip. */
+/** A small icon badge with a tick and a delayed, state-driven tooltip. */
 function StatusBadge({
   active,
   title,
@@ -58,15 +58,55 @@ function StatusBadge({
   title: string;
   children: ReactNode;
 }) {
+  const [visible, setVisible] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoHide = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const show = () => {
+    if (timer.current) clearTimeout(timer.current);
+    if (autoHide.current) clearTimeout(autoHide.current);
+    timer.current = setTimeout(() => {
+      setVisible(true);
+      // Safety net: a warped pointer can skip mouseleave entirely.
+      autoHide.current = setTimeout(() => setVisible(false), 4000);
+    }, 220);
+  };
+  const hide = () => {
+    if (timer.current) clearTimeout(timer.current);
+    if (autoHide.current) clearTimeout(autoHide.current);
+    timer.current = null;
+    autoHide.current = null;
+    setVisible(false);
+  };
+
+  useEffect(() => {
+    window.addEventListener("blur", hide);
+    document.addEventListener("mouseleave", hide);
+    return () => {
+      window.removeEventListener("blur", hide);
+      document.removeEventListener("mouseleave", hide);
+      if (timer.current) clearTimeout(timer.current);
+      if (autoHide.current) clearTimeout(autoHide.current);
+    };
+  }, []);
+
   return (
     <span
       className={`status-icon${active ? " active" : ""}`}
-      data-tooltip={title}
       data-testid={title}
       tabIndex={0}
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onFocus={show}
+      onBlur={hide}
     >
       {children}
       {active && <span className="badge-tick">✓</span>}
+      {visible && (
+        <span className="status-tooltip" role="tooltip">
+          {title}
+        </span>
+      )}
     </span>
   );
 }

@@ -53,20 +53,26 @@ body {
   position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  /* Padding enlarges the hover target; the matching negative margin keeps
+     the visual layout unchanged. Small pointer moves no longer drop hover. */
+  padding: 6px;
+  margin: -6px -3px;
   gap: 5px;
   color: var(--jot-dim);
   cursor: help;
   line-height: 0;
+  outline: none;
 }
 
 /* Native title tooltips do not render in the Tauri webview on Wayland, so
-   draw our own. Shown below the icon so the window edge cannot clip it. */
-.status-icon::after {
-  content: attr(data-tooltip);
+   draw our own. React controls when it exists: a 220ms show delay avoids
+   flashes on quick passes, and leaving hides it immediately. */
+.status-tooltip {
   position: absolute;
-  top: calc(100% + 10px);
+  top: calc(100% + 2px);
   left: 50%;
-  transform: translateX(-50%) translateY(-4px);
+  transform: translateX(-50%);
   background: var(--jot-surface);
   color: var(--jot-fg);
   border: 1px solid var(--jot-dim);
@@ -76,16 +82,8 @@ body {
   line-height: 1.4;
   white-space: nowrap;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
-  opacity: 0;
   pointer-events: none;
-  transition: opacity 120ms ease, transform 120ms ease;
   z-index: 50;
-}
-
-.status-icon:hover::after,
-.status-icon:focus-visible::after {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
 }
 
 .status-icon.active {
