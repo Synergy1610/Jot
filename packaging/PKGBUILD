@@ -33,5 +33,14 @@ package() {
   install -Dm755 src-tauri/target/release/jot "$pkgdir/usr/bin/jot"
   install -Dm644 packaging/jot.desktop "$pkgdir/usr/share/applications/jot.desktop"
   install -Dm644 packaging/jot-autostart.desktop "$pkgdir/etc/xdg/autostart/jot.desktop"
-  install -Dm644 src-tauri/icons/128x128.png "$pkgdir/usr/share/icons/hicolor/128x128/apps/jot.png"
+  for size in 32 64 128; do
+    install -Dm644 "src-tauri/icons/${size}x${size}.png" \
+      "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/jot.png"
+  done
+  install -Dm644 src-tauri/icons/128x128@2x.png \
+    "$pkgdir/usr/share/icons/hicolor/256x256/apps/jot.png"
+  install -Dm644 src-tauri/icons/jot.svg \
+    "$pkgdir/usr/share/icons/hicolor/scalable/apps/jot.svg"
+
+  gtk-update-icon-cache -q -t -f "$pkgdir/usr/share/icons/hicolor" || true
 }
