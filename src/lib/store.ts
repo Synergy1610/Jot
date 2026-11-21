@@ -17,6 +17,7 @@ const PAD_ID = 1;
 
 export interface PadState {
   content: string; // editable body only (no divider)
+  archive: string; // earlier days' full log, kept read-only but visible
   divider: string; // read-only display string
   updatedAt: string | null;
   dirty: boolean;
@@ -29,6 +30,7 @@ let dividerKey = "";
 let dividerLine = "";
 let state: PadState = {
   content: "",
+  archive: "",
   divider: "",
   updatedAt: null,
   dirty: false,
@@ -119,6 +121,7 @@ export async function loadPad(): Promise<string> {
     dividerLine = line;
     state = {
       content: body,
+      archive,
       divider: formatDividerKey(key),
       updatedAt: row?.updated_at ?? null,
       dirty: Boolean(row?.dirty),

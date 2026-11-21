@@ -28,8 +28,9 @@ function StatusBadge({
   return (
     <span
       className={`status-icon${active ? " active" : ""}`}
-      title={title}
+      data-tooltip={title}
       data-testid={title}
+      tabIndex={0}
     >
       {children}
       {active && <span className="badge-tick">✓</span>}
@@ -57,6 +58,7 @@ function CloudIcon() {
 export default function App() {
   const [content, setContent] = useState("");
   const [divider, setDivider] = useState("");
+  const [archive, setArchive] = useState("");
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [headerDate] = useState(displayDate);
@@ -93,6 +95,7 @@ export default function App() {
       if (!disposed) {
         setContent(text);
         setDivider(getPadState().divider);
+        setArchive(getPadState().archive);
       }
       setTimeout(focusPad, 50);
     });
@@ -159,6 +162,11 @@ export default function App() {
           ⚙
         </button>
       </header>
+      {archive && (
+        <div className="archive" data-testid="archive">
+          {archive}
+        </div>
+      )}
       <div className="day-divider" data-testid="day-divider">
         {divider}
       </div>

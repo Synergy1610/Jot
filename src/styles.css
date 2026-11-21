@@ -39,12 +39,42 @@ body {
 }
 
 .status-icon {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 5px;
   color: var(--jot-dim);
   cursor: help;
   line-height: 0;
+}
+
+/* Native title tooltips do not render in the Tauri webview on Wayland, so
+   draw our own. Shown below the icon so the window edge cannot clip it. */
+.status-icon::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  background: var(--jot-surface);
+  color: var(--jot-fg);
+  border: 1px solid var(--jot-dim);
+  border-radius: 6px;
+  padding: 5px 9px;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease, transform 120ms ease;
+  z-index: 50;
+}
+
+.status-icon:hover::after,
+.status-icon:focus-visible::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 .status-icon.active {
@@ -88,6 +118,22 @@ body {
   flex-direction: column;
   overflow: hidden;
   background: var(--jot-bg);
+}
+
+/* Earlier days stay visible above today's divider, read-only and scrollable. */
+.archive {
+  flex: 0 1 auto;
+  max-height: 45%;
+  overflow-y: auto;
+  padding: var(--jot-space) var(--jot-padding) 6px;
+  color: var(--jot-fg-light);
+  opacity: 0.8;
+  font: inherit;
+  line-height: var(--jot-line-height);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  border-bottom: 1px solid var(--jot-dim);
 }
 
 /* T-006 Option A: read-only date header, outside the textarea. */
