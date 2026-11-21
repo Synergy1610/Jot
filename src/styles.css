@@ -108,16 +108,31 @@ body {
 }
 
 .gear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  margin: -6px -3px;
   background: none;
   border: none;
-  color: var(--jot-fg);
-  font-size: 16px;
+  color: var(--jot-dim);
   cursor: pointer;
-  opacity: 0.7;
 }
 
-.gear:hover {
-  opacity: 1;
+.gear:hover,
+.gear:focus-visible {
+  color: var(--jot-muted);
+  outline: none;
+}
+
+.gear svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* The pad itself: the editor. */
