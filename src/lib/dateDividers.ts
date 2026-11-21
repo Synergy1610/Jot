@@ -101,7 +101,7 @@ export function parseLegacyLog(text: string): {
   };
 }
 
-/** Rebuild the full stored log from its parts. */
+/** Rebuild the full stored log from its parts (legacy divider format). */
 export function buildFullContent(
   archive: string,
   dividerLine: string,
@@ -113,4 +113,50 @@ export function buildFullContent(
   parts.push("");
   if (body.trim()) parts.push(body.trim());
   return parts.join("\n");
+}
+
+// --- Inline date tags: one continuous pad, tag appended after a line. ---
+
+/** Small tag, e.g. "· 20 Nov 2026". */
+export function inlineTagForDate(d: Date = new Date()): string {
+  return `· ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+const TAG_RE = /\s*·\s+\d{1,2}\s+[A-Za-z]{3}\s+\d{4}\s*$/;
+
+export function hasInlineTag(line: string): boolean {
+  return TAG_RE.test(line);
+}
+
+/**
+ * One-time upgrade from the old divider-header format. A divider introduced
+ * the section BELOW it, so every line in that section gets the divider's date
+ * as its small inline tag. No user text is removed or reordered.
+ */
+export function migrateDividersToTags(text: string): string {
+  const out: string[] = [];
+  let currentTag: string | null = null;
+  let skipBlank = false;
+
+  for (const line of text.split("\n")) {
+    const key = parseDividerLine(line);
+    if (key) {
+      const [year, month, day] = key.split("-").map(Number);
+      currentTag = inlineTagForDate(new Date(year, month - 1, day));
+      skipBlank = true;
+      continue;
+    }
+    if (!line.trim()) {
+      if (!skipBlank) out.push(line);
+      continue;
+    }
+    skipBlank = false;
+    out.push(
+      currentTag && !hasInlineTag(line)
+        ? line.trimEnd() + "  " + currentTag
+        : line,
+    );
+  }
+
+  return out.join("\n").replace(/^\n+|\n+$/g, "");
 }

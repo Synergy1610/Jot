@@ -1,37 +1,23 @@
-//! T-005 / Option A: local SQLite store.
-//! pad.content keeps the full log (archive + divider + body), but the editor
-//! only ever receives the editable body. The divider is a read-only header.
+//! Local SQLite store: one continuous pad, with small inline date tags.
+//! The whole log is a single editable string; tags are plain text appended
+//! when a line is completed, so nothing is hidden or read-only.
 
 import Database from "@tauri-apps/plugin-sql";
-import {
-  buildFullContent,
-  dividerForDate,
-  dividerKeyForDate,
-  formatDividerKey,
-  parseLegacyLog,
-  parseNewLog,
-} from "./dateDividers";
+import { migrateDividersToTags } from "./dateDividers";
 
 const DB_URL = "sqlite:pad.db";
 const PAD_ID = 1;
 
 export interface PadState {
-  content: string; // editable body only (no divider)
-  archive: string; // earlier days' full log, kept read-only but visible
-  divider: string; // read-only display string
+  content: string;
   updatedAt: string | null;
   dirty: boolean;
   syncedAt: string | null;
 }
 
 let db: Database | null = null;
-let archive = "";
-let dividerKey = "";
-let dividerLine = "";
 let state: PadState = {
   content: "",
-  archive: "",
-  divider: "",
   updatedAt: null,
   dirty: false,
   syncedAt: null,
@@ -62,10 +48,19 @@ async function writeSetting(sqlDb: Database, key: string, value: string): Promis
   );
 }
 
-/**
- * Load the pad. Migrates legacy divider-after-text content, rotates to a new
- * day when needed, and returns only the editable body to the textarea.
- */
+async function persist(sqlDb: Database, content: string, now: Date): Promise<void> {
+  state.content = content;
+  state.updatedAt = now.toISOString();
+  state.dirty = true;
+  await sqlDb.execute(
+    "INSERT INTO pad (id, content, updated_at, dirty) VALUES (?, ?, ?, 1) " +
+      "ON CONFLICT(id) DO UPDATE SET content=excluded.content, " +
+      "updated_at=excluded.updated_at, dirty=1",
+    [PAD_ID, content, state.updatedAt],
+  );
+}
+
+/** Load the pad, migrating old divider-formatted logs to inline date tags once. */
 export async function loadPad(): Promise<string> {
   try {
     const sqlDb = await getDb();
@@ -79,55 +74,21 @@ export async function loadPad(): Promise<string> {
       }>
     >("SELECT id, content, updated_at, dirty, synced_at FROM pad");
     const row = rows.find((r) => r.id === PAD_ID);
-    const rawContent = row?.content ?? "";
-    const storedKey = await readSetting(sqlDb, "divider_date");
-    const today = dividerKeyForDate();
+    let content = row?.content ?? "";
 
-    let body: string;
-    let key: string;
-    let line: string;
-
-    if (storedKey) {
-      // New format: archive + divider + body.
-      const parts = parseNewLog(rawContent);
-      archive = parts.archive;
-      body = parts.body;
-      key = storedKey;
-      line = parts.dividerLine ?? formatDividerKey(storedKey);
-      if (key !== today) {
-        // Archive yesterday's section and start a fresh day.
-        archive = buildFullContent(archive, line, body);
-        body = "";
-        key = today;
-        line = dividerForDate();
-      }
-    } else {
-      // Legacy migration: divider was appended after the text.
-      const legacy = parseLegacyLog(rawContent);
-      archive = "";
-      body = legacy.body;
-      key = legacy.dividerKey ?? today;
-      line = legacy.dividerLine ?? dividerForDate();
-      if (key !== today) {
-        archive = buildFullContent("", line, body);
-        body = "";
-        key = today;
-        line = dividerForDate();
-      }
-      await writeSetting(sqlDb, "divider_date", key);
+    if (!(await readSetting(sqlDb, "tag_format"))) {
+      content = migrateDividersToTags(content);
+      await persist(sqlDb, content, new Date());
+      await writeSetting(sqlDb, "tag_format", "1");
     }
 
-    dividerKey = key;
-    dividerLine = line;
     state = {
-      content: body,
-      archive,
-      divider: formatDividerKey(key),
+      content,
       updatedAt: row?.updated_at ?? null,
       dirty: Boolean(row?.dirty),
       syncedAt: row?.synced_at ?? null,
     };
-    await savePad(body);
+    onSaveHandler?.();
   } catch (error) {
     console.error("jot: loadPad failed", error);
   }
@@ -138,21 +99,9 @@ export function getPadState(): PadState {
   return { ...state };
 }
 
-/** Save the editable body; the divider and archive are restored automatically. */
-export async function savePad(body: string, now = new Date()): Promise<void> {
+export async function savePad(content: string, now = new Date()): Promise<void> {
   try {
-    const sqlDb = await getDb();
-    state.content = body;
-    state.updatedAt = now.toISOString();
-    state.dirty = true;
-    const full = buildFullContent(archive, dividerLine, body);
-    await sqlDb.execute(
-      "INSERT INTO pad (id, content, updated_at, dirty) VALUES (?, ?, ?, 1) " +
-        "ON CONFLICT(id) DO UPDATE SET content=excluded.content, " +
-        "updated_at=excluded.updated_at, dirty=1",
-      [PAD_ID, full, state.updatedAt],
-    );
-    await writeSetting(sqlDb, "divider_date", dividerKey);
+    await persist(await getDb(), content, now);
   } catch (error) {
     console.error("jot: savePad failed", error);
   }
@@ -163,9 +112,7 @@ export function setOnSave(handler: (() => void) | null): void {
 }
 
 function scheduleSave(): void {
-  if (saveTimer !== null) {
-    clearTimeout(saveTimer);
-  }
+  if (saveTimer !== null) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     saveTimer = null;
     void savePad(state.content);
@@ -173,28 +120,21 @@ function scheduleSave(): void {
   }, 300);
 }
 
+/** The whole pad is editable text; tags are inserted by the UI on Enter. */
 export function onContentChange(text: string): string {
   state.content = text;
   scheduleSave();
   return text;
 }
 
-/** Edit earlier days in place; the read-only dividers are left untouched. */
-export function onArchiveChange(text: string): string {
-  archive = text;
-  state.archive = text;
-  scheduleSave();
-  return text;
-}
-
-/** T-009: wipe today's body and stash it for one undo. */
+/** T-009: wipe the pad and stash it for one undo. */
 export async function clearPad(): Promise<void> {
   const sqlDb = await getDb();
   await writeSetting(sqlDb, "last_cleared", state.content);
   await savePad("");
 }
 
-/** T-009: restore the most recently cleared body. */
+/** T-009: restore the most recently cleared pad. */
 export async function undoClear(): Promise<boolean> {
   const sqlDb = await getDb();
   const saved = await readSetting(sqlDb, "last_cleared");

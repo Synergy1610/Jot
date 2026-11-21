@@ -1,9 +1,19 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from "react";
 import { SettingsPanel } from "./components/SettingsPanel";
-import { dividerForDate } from "./lib/dateDividers";
-import { getPadState, loadPad, onArchiveChange, onContentChange, setOnSave } from "./lib/store";
+import {
+  dividerForDate,
+  hasInlineTag,
+  inlineTagForDate,
+} from "./lib/dateDividers";
+import { getPadState, loadPad, onContentChange, setOnSave } from "./lib/store";
 
 type Health = {
   ok: boolean;
@@ -15,7 +25,7 @@ function displayDate(): string {
   return dividerForDate().slice(1, -1).trim();
 }
 
-/** A small icon badge with a tick and a native hover tooltip. */
+/** A small icon badge with a tick and a hover tooltip. */
 function StatusBadge({
   active,
   title,
@@ -57,8 +67,6 @@ function CloudIcon() {
 
 export default function App() {
   const [content, setContent] = useState("");
-  const [divider, setDivider] = useState("");
-  const [archive, setArchive] = useState("");
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [headerDate] = useState(displayDate);
@@ -67,7 +75,6 @@ export default function App() {
   const [dirty, setDirty] = useState(false);
   const settingsOpenRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const archiveRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     settingsOpenRef.current = settingsOpen;
@@ -93,11 +100,7 @@ export default function App() {
       });
 
     loadPad().then((text) => {
-      if (!disposed) {
-        setContent(text);
-        setDivider(getPadState().divider);
-        setArchive(getPadState().archive);
-      }
+      if (!disposed) setContent(text);
       setTimeout(focusPad, 50);
     });
 
@@ -135,6 +138,28 @@ export default function App() {
     };
   }, []);
 
+  /** Enter finishes a line: append today's small tag, then start a new line. */
+  const onEnter = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    event.preventDefault();
+    const el = event.currentTarget;
+    const text = el.value;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const lineStart = text.lastIndexOf("\n", start - 1) + 1;
+    const nextBreak = text.indexOf("\n", end);
+    const lineEnd = nextBreak === -1 ? text.length : nextBreak;
+    const line = text.slice(lineStart, lineEnd);
+    const finished = hasInlineTag(line) ? line : line.trimEnd() + "  " + inlineTagForDate();
+    const next = text.slice(0, lineStart) + finished + "\n" + text.slice(lineEnd);
+    const caret = lineStart + finished.length + 1;
+
+    setDirty(true);
+    setContent(onContentChange(next));
+    requestAnimationFrame(() => {
+      el.selectionStart = el.selectionEnd = caret;
+    });
+  };
+
   const localSaved = !dirty && !error && health?.db !== false;
   const localTitle = error
     ? "Local save failed"
@@ -163,31 +188,19 @@ export default function App() {
           ⚙
         </button>
       </header>
-      {archive && (
-        <textarea
-          ref={archiveRef}
-          className="archive"
-          data-testid="archive"
-          aria-label="Earlier days"
-          value={archive}
-          onChange={(event) => {
-            setDirty(true);
-            setArchive(onArchiveChange(event.target.value));
-          }}
-        />
-      )}
-      <div className="day-divider" data-testid="day-divider">
-        {divider}
-      </div>
       <textarea
         ref={textareaRef}
         className="textarea"
+        data-testid="pad"
         value={content}
         placeholder="Start typing…"
         autoFocus
         onChange={(event) => {
           setDirty(true);
           setContent(onContentChange(event.target.value));
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") onEnter(event);
         }}
       />
       <SettingsPanel
