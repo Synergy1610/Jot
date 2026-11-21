@@ -117,12 +117,25 @@ export function buildFullContent(
 
 // --- Inline date tags: one continuous pad, tag appended after a line. ---
 
-/** Small tag, e.g. "· 20 Nov 2026". */
+/** Small tag, e.g. "| 20 Nov 2026". */
 export function inlineTagForDate(d: Date = new Date()): string {
-  return `· ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  return `| ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-const TAG_RE = /\s*·\s+\d{1,2}\s+[A-Za-z]{3}\s+\d{4}\s*$/;
+const TAG_RE = /\s*\|\s+\d{1,2}\s+[A-Za-z]{3}\s+\d{4}\s*$/;
+
+const OLD_TAG_RE = /\s*·\s+(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})\s*$/;
+
+/** One-time upgrade from the old "·" separator to "|". */
+export function upgradeTagSeparators(text: string): string {
+  return text
+    .split("\n")
+    .map((line) => {
+      const match = OLD_TAG_RE.exec(line);
+      return match ? line.replace(match[0], "  | " + match[1]) : line;
+    })
+    .join("\n");
+}
 
 export function hasInlineTag(line: string): boolean {
   return TAG_RE.test(line);

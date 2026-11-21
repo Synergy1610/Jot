@@ -3,7 +3,7 @@
 //! when a line is completed, so nothing is hidden or read-only.
 
 import Database from "@tauri-apps/plugin-sql";
-import { migrateDividersToTags } from "./dateDividers";
+import { migrateDividersToTags, upgradeTagSeparators } from "./dateDividers";
 
 const DB_URL = "sqlite:pad.db";
 const PAD_ID = 1;
@@ -76,10 +76,17 @@ export async function loadPad(): Promise<string> {
     const row = rows.find((r) => r.id === PAD_ID);
     let content = row?.content ?? "";
 
-    if (!(await readSetting(sqlDb, "tag_format"))) {
+    let format = await readSetting(sqlDb, "tag_format");
+    if (!format) {
       content = migrateDividersToTags(content);
       await persist(sqlDb, content, new Date());
       await writeSetting(sqlDb, "tag_format", "1");
+      format = "1";
+    }
+    if (format !== "2") {
+      content = upgradeTagSeparators(content);
+      await persist(sqlDb, content, new Date());
+      await writeSetting(sqlDb, "tag_format", "2");
     }
 
     state = {

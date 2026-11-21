@@ -26,7 +26,7 @@ function displayDate(): string {
   return dividerForDate().slice(1, -1).trim();
 }
 
-const TAG_RE = /^(.*?)(\s*·\s*\d{1,2}\s+[A-Za-z]{3}\s+\d{4})$/;
+const TAG_RE = /^(.*?)(\s*\|\s*\d{1,2}\s+[A-Za-z]{3}\s+\d{4})$/;
 
 /** Mirror the editable text with date tags wrapped in coloured spans. */
 function mirrorContent(text: string) {
