@@ -10,21 +10,20 @@
   <rect width="512" height="512" rx="112" fill="#090809"/>
   <rect x="8" y="8" width="496" height="496" rx="104" fill="none" stroke="#584e51" stroke-width="4"/>
 
-  <!-- inverted fountain-pen nib: sharp point at the top -->
-  <path d="M276 60
-           C256 98 224 152 218 182
-           C214 204 228 216 248 216
-           L304 216
-           C324 216 338 204 334 182
-           C328 152 296 98 276 60 Z"
+  <!-- slim fountain-pen nib: long, sharp point at the top -->
+  <path d="M276 48
+           L312 186
+           C315 204 304 214 288 214
+           L264 214
+           C248 214 237 204 240 186 Z"
         fill="url(#nib)"/>
-  <path d="M276 82 V204" stroke="#090809" stroke-width="7" stroke-linecap="butt"/>
-  <circle cx="276" cy="192" r="9" fill="#090809"/>
-  <path d="M239 178 C253 138 265 110 272 88" stroke="#584e51" stroke-width="5" fill="none" stroke-linecap="butt"/>
-  <path d="M313 178 C299 138 287 110 280 88" stroke="#584e51" stroke-width="5" fill="none" stroke-linecap="butt"/>
+  <path d="M276 66 V200" stroke="#090809" stroke-width="5" stroke-linecap="butt"/>
+  <circle cx="276" cy="196" r="7" fill="#090809"/>
+  <path d="M252 182 L270 88" stroke="#584e51" stroke-width="4" fill="none" stroke-linecap="butt"/>
+  <path d="M300 182 L282 88" stroke="#584e51" stroke-width="4" fill="none" stroke-linecap="butt"/>
 
-  <!-- bold J: the pen body, with squared-off ends -->
-  <path d="M276 212 V348 C276 396 244 422 200 422 L170 394"
+  <!-- bold J: the pen body, smooth hook and a squared-off end -->
+  <path d="M276 212 V352 C276 408 244 436 190 436 L160 436"
         stroke="#b59790" stroke-width="46" fill="none"
         stroke-linecap="butt" stroke-linejoin="miter"/>
 </svg>
