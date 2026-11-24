@@ -1,0 +1,7 @@
+<RCC>
+  <qresource prefix="/">
+    <file>Main.qml</file>
+    <file>gear.svg</file>
+    <file alias="jot-icon.png">../../src-tauri/icons/icon.png</file>
+  </qresource>
+</RCC>

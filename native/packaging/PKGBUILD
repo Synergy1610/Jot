@@ -1,0 +1,39 @@
+# Optional Arch package for the native Jot build.
+# Build from the repository with: makepkg -p native/packaging/PKGBUILD
+# This does not replace an existing ~/.local/bin/jot; see install-native.sh.
+
+pkgname=jot-native
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Low-memory native Jot scratchpad with a shared Rust core"
+arch=('x86_64')
+license=('MIT')
+depends=('qt6-base' 'qt6-declarative' 'qt6-quickcontrols2' 'hicolor-icon-theme')
+makedepends=('cargo' 'rust' 'qt6-tools' 'make')
+options=('!lto')
+
+build() {
+    local repo
+    repo="$(cd "$startdir/../.." && pwd)"
+
+    cargo build --release --manifest-path "$repo/native/core/Cargo.toml"
+
+    mkdir -p "$srcdir/desktop"
+    cd "$srcdir/desktop"
+    qmake6 "$repo/native/desktop/jot.pro" \
+        "JOT_CORE_LIB=$repo/native/core/target/release/libjot_core.a"
+    make
+}
+
+package() {
+    local repo
+    repo="$(cd "$startdir/../.." && pwd)"
+
+    install -Dm755 "$srcdir/desktop/jot" "$pkgdir/usr/bin/jot"
+    install -Dm644 "$repo/native/packaging/jot.desktop" \
+        "$pkgdir/usr/share/applications/jot.desktop"
+    install -Dm644 "$repo/native/packaging/jot-autostart.desktop" \
+        "$pkgdir/etc/xdg/autostart/jot.desktop"
+    install -Dm644 "$repo/src-tauri/icons/128x128.png" \
+        "$pkgdir/usr/share/icons/hicolor/128x128/apps/jot.png"
+}

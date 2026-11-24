@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Jot
+Comment=A summoned scratchpad
+Exec=jot
+Icon=jot
+Categories=Utility;TextEditor;
+Terminal=false
+NoDisplay=false

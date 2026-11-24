@@ -1,0 +1,11 @@
+[package]
+name = "jot-core"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["rlib", "staticlib"]
+
+[dependencies]
+rusqlite = { version = "0.32", features = ["bundled", "backup"] }
