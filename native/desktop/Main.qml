@@ -212,7 +212,8 @@ ApplicationWindow {
                     ToolButton {
                         id: localBadge
                         objectName: "localBadge"
-                        anchors.left: parent.left
+                        anchors.left: cloudBadge.right
+                        anchors.leftMargin: 4
                         anchors.verticalCenter: parent.verticalCenter
                         width: 36
                         height: 30
@@ -279,8 +280,7 @@ ApplicationWindow {
                     ToolButton {
                         id: cloudBadge
                         objectName: "cloudBadge"
-                        anchors.left: localBadge.right
-                        anchors.leftMargin: 4
+                        anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
                         width: 48
                         height: 30

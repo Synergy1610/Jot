@@ -226,8 +226,6 @@ int main(int argc, char **argv) {
         if (markerFile.open(QIODevice::WriteOnly)) markerFile.write("1\n");
     }
 #endif
-    // Bullets are applied after legacy divider/tag migration, never before it.
-    backend.normalizeEntries();
 #ifdef JOT_PRODUCTION
     // Install before the first map: on Wayland the compositor chooses the
     // initial position, so a rule is the only way to avoid a visible jump

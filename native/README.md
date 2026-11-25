@@ -26,23 +26,20 @@ the Account, Hotkey (Linux / Hyprland), Clear pad and About sections and the
 1.5s Copy feedback.
 
 The header has a 1px divider, 16px side padding, a smaller gear icon, and
-status badges with room to spare: the device badge is 36px wide and the cloud
-badge 48px, with the spinner and tick anchored the same 3px gap to the right
-of their icon. The cloud badge reserves a further tick slot at 18px, and the
-gap between the badges is reduced to 4px. The gear is a circular 17px icon in
-the same `#b59790` accent as the date, at full opacity; it sits inside an Item
-wrapper so the Button cannot stretch it. Hovering either badge
-shows a delayed, fully opaque black tooltip in the same monospace 13px font
-(220ms delay, 4s timeout), clamped inside the window. The editor has 10px top
-and 16px side padding below the header divider, scrolls to keep the caret line
-fully visible (8px bottom margin), and never leaves half a line cut off at the
-bottom. Each non-empty entry starts with `• ` and gets an inline date tag when
-Enter finishes the line; wrapped visual lines do not get their own bullet.
-Existing pads are bulleted once on open. The bottom status text is gone: the
-spinner appears while saving and the tick when saved. The header cloud icon is
-static — grey while signed out, accent-coloured while signed in — with no
-spinner or tick. Save failures tint the device icon `#c38b7b` and show "Local
-save failed" in the tooltip.
+status badges with room to spare: the cloud badge (48px) comes first, then the
+device badge (36px), with a 4px gap. The device badge's spinner and tick sit
+3px to the right of its icon; the cloud badge is a static icon. The gear is a
+circular 17px icon in the same `#b59790` accent as the date, at full opacity;
+it sits inside an Item wrapper so the Button cannot stretch it. Hovering either
+badge shows a delayed, fully opaque black tooltip in the same monospace 13px
+font (220ms delay, 4s timeout), clamped inside the window. The editor has 10px
+top and 16px side padding below the header divider, scrolls to keep the caret
+line fully visible (8px bottom margin), and never leaves half a line cut off at
+the bottom. Enter finishes the current line with its inline date tag. The
+bottom status text is gone: the spinner appears while saving and the tick when
+saved. The cloud icon is grey while signed out and accent-coloured while signed
+in, with no spinner or tick. Save failures tint the device icon
+`#c38b7b` and show "Local save failed" in the tooltip.
 
 ## Data compatibility
 

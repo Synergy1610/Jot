@@ -73,24 +73,6 @@ fn append_text(base: &str, extra: &str) -> String {
     format!("{}\n\n{}", base.trim_end_matches('\n'), extra.trim_start_matches('\n'))
 }
 
-/// Jot entries are one paragraph per note, written as "• sentence  | date".
-/// Prefix a bullet to every non-empty line that does not already have one.
-/// Blank lines stay blank, and wrapped visual lines are unaffected because
-/// they contain no newline.
-pub fn normalize_entries(text: &str) -> String {
-    let mut normalized = String::with_capacity(text.len() + 8);
-    for (index, line) in text.split('\n').enumerate() {
-        if index > 0 { normalized.push('\n'); }
-        if line.trim().is_empty() || line.trim_start().starts_with('•') {
-            normalized.push_str(line);
-        } else {
-            normalized.push_str("• ");
-            normalized.push_str(line);
-        }
-    }
-    normalized
-}
-
 /// Compare pads without letting a trailing newline look like an edit.
 fn without_trailing_newlines(text: &str) -> &str {
     text.trim_end_matches(['\n', '\r'])
@@ -377,13 +359,11 @@ impl Cloud {
         let Some(session) = self.session.as_ref() else { return Ok(()) };
         if load_base(&session.user_id).is_some() { return Ok(()); }
         let Some(pad) = remote else { return Ok(()) };
-        let local = normalize_entries(local);
-        let remote = normalize_entries(&pad.content);
-        if without_trailing_newlines(&local) != without_trailing_newlines(&remote) {
+        if without_trailing_newlines(local) != without_trailing_newlines(&pad.content) {
             return Ok(());
         }
         save_base(&session.user_id, &BaseState {
-            content: remote, version: pad.version, user_id: String::new(),
+            content: pad.content.clone(), version: pad.version, user_id: String::new(),
         })
     }
 
@@ -391,21 +371,18 @@ impl Cloud {
     /// the bottom of the cloud pad; conflicting edits are reported, never
     /// overwritten. Returns the pad that should become the local content.
     pub fn sync(&mut self, local: &str) -> Result<CloudPad, String> {
-        let local = normalize_entries(local);
         let remote = self.download()?;
         let user_id = self.session.as_ref().map(|session| session.user_id.clone())
             .ok_or_else(|| "Not signed in".to_string())?;
         let Some(remote) = remote else {
-            let pad = self.upload(&local, 0)?;
+            let pad = self.upload(local, 0)?;
             save_base(&user_id, &BaseState {
-                content: local, version: pad.version, user_id: String::new(),
+                content: local.to_string(), version: pad.version, user_id: String::new(),
             })?;
             return Ok(pad);
         };
-        let base = load_base(&user_id)
-            .filter(|state| !state.content.is_empty())
-            .map(|state| normalize_entries(&state.content));
-        match plan_sync(&local, base.as_deref(), &remote.content) {
+        let base = load_base(&user_id).filter(|state| !state.content.is_empty());
+        match plan_sync(local, base.as_ref().map(|state| state.content.as_str()), &remote.content) {
             SyncPlan::Pull => {
                 save_base(&user_id, &BaseState {
                     content: remote.content.clone(), version: remote.version,
@@ -433,8 +410,7 @@ impl Cloud {
         let rows = value.as_array().ok_or_else(|| "Unexpected pads response".to_string())?;
         let Some(row) = rows.first() else { return Ok(None); };
         Ok(Some(CloudPad {
-            content: normalize_entries(
-                row.get("content").and_then(Value::as_str).unwrap_or("")),
+            content: row.get("content").and_then(Value::as_str).unwrap_or("").to_string(),
             updated_at: row.get("updated_at").and_then(Value::as_str).unwrap_or("").to_string(),
             version: row.get("version").and_then(Value::as_i64).unwrap_or(0),
         }))
@@ -444,7 +420,6 @@ impl Cloud {
     /// first upload. A conflict is returned as an error so the caller can
     /// decide rather than overwriting cloud notes.
     pub fn upload(&mut self, content: &str, version: i64) -> Result<CloudPad, String> {
-        let content = normalize_entries(content);
         // Always compare against the remote before writing. A version 0 upload
         // must not overwrite a pad that already exists in the cloud.
         let remote = self.download()?;
@@ -555,38 +530,6 @@ mod tests {
         assert_eq!(
             plan_sync("rewritten", Some("base"), "remote"),
             SyncPlan::Conflict
-        );
-    }
-
-    #[test]
-    fn entries_get_one_bullet_and_blank_lines_stay_blank() {
-        assert_eq!(
-            normalize_entries("first\n\nsecond  | 1 Jan 2020"),
-            "• first\n\n• second  | 1 Jan 2020"
-        );
-        assert_eq!(normalize_entries("• first\n• second"), "• first\n• second");
-        assert_eq!(normalize_entries(""), "");
-        assert_eq!(normalize_entries("\n\n"), "\n\n");
-        assert_eq!(normalize_entries("  indented"), "•   indented");
-        assert_eq!(
-            normalize_entries(&normalize_entries("one\ntwo")),
-            "• one\n• two"
-        );
-    }
-
-    #[test]
-    fn unbulleted_base_does_not_conflict_with_bulleted_local() {
-        let base = normalize_entries("one\n\ntwo");
-        let local = normalize_entries("one\n\ntwo");
-        let remote = normalize_entries("one\n\ntwo\n\nthree");
-        assert_eq!(plan_sync(&local, Some(&base), &remote), SyncPlan::Pull);
-        assert_eq!(
-            plan_sync(
-                &normalize_entries("one\n\ntwo"),
-                Some(&normalize_entries("one")),
-                &normalize_entries("one\n\nthree"),
-            ),
-            SyncPlan::Upload("• one\n\n• three\n\n• two".into())
         );
     }
 }

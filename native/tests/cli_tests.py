@@ -79,7 +79,7 @@ class ProcessTests(unittest.TestCase):
         self.assertEqual(result.stdout.strip(), "ok quitting")
         self.assertEqual(process.wait(timeout=5), 0)
         with sqlite3.connect(self.db) as db:
-            self.assertEqual(db.execute("SELECT content FROM pad").fetchone()[0], "• test note")
+            self.assertEqual(db.execute("SELECT content FROM pad").fetchone()[0], "test note")
 
     def test_different_databases_have_separate_instances(self):
         second = self.directory / "second.db"

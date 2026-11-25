@@ -95,7 +95,6 @@ public:
     Q_INVOKABLE void quitAfterSync();
     bool backupTo(const QString &path);
     bool migrateLegacy();
-    bool normalizeEntries();
 
 signals:
     void contentChanged();

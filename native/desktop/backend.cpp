@@ -64,11 +64,6 @@ Backend::Backend(const QString &databasePath, QObject *parent)
     connect(&m_timer, &QTimer::timeout, this, &Backend::flush);
     setStatus(tr("Saved on this device"));
     refreshUndo();
-#ifndef JOT_PRODUCTION
-    // The prototype has no legacy migration pass; the production entry point
-    // calls this after migrateLegacy() instead.
-    normalizeEntries();
-#endif
 
     qRegisterMetaType<CloudResult>("CloudResult");
     m_cloudThread = new QThread(this);
@@ -156,31 +151,6 @@ bool Backend::migrateLegacy() {
         if (m_document) replaceDocument(migrated);
         emit contentChanged();
     }
-    return true;
-}
-
-// Called after legacy migration, before the editor is shown. Prefixes every
-// non-empty entry with a bullet and saves the result locally once.
-bool Backend::normalizeEntries() {
-    if (!ready()) return false;
-    const QByteArray loaded = m_saved.toUtf8();
-    char *normalized = jot_core_normalize_entries(loaded.constData());
-    if (!normalized) return false;
-    const QString candidate = QString::fromUtf8(normalized);
-    jot_core_string_free(normalized);
-    if (candidate == m_saved) return true;
-    // Leave notes the editor cannot represent untouched.
-    if (candidate.contains(QChar::Null) || !candidate.isValidUtf16()
-        || candidate.contains(QLatin1Char('\r')))
-        return false;
-    char *error = nullptr;
-    const QByteArray current = candidate.toUtf8();
-    if (!jot_core_save(m_pad, loaded.constData(), current.constData(), &error)) {
-        if (error) jot_core_string_free(error);
-        return false;
-    }
-    m_saved = m_content = candidate;
-    emit contentChanged();
     return true;
 }
 
@@ -593,10 +563,6 @@ int Backend::finishLine(int selectionStart, int selectionEnd) {
     static const QRegularExpression tag(
         QStringLiteral(R"(\s*[|·]\s+\d{1,2}\s+[A-Za-z]{3}\s+\d{4}\s*$)"),
         QRegularExpression::UseUnicodePropertiesOption);
-    const QString content = line.trimmed();
-    const bool hasText = !content.isEmpty() && content != QStringLiteral("•");
-    const bool alreadyBulleted = content.startsWith(QChar(0x2022));
-    static const QString bullet = QStringLiteral("• ");
 
     QTextCursor cursor(m_document);
     cursor.beginEditBlock();
@@ -615,16 +581,6 @@ int Backend::finishLine(int selectionStart, int selectionEnd) {
             .arg(today.year()));
     }
     cursor.insertBlock();
-    if (hasText) {
-        // Bullet the sentence that was just finished, then start the new line
-        // with its own bullet. Inserting before the cursor shifts it safely.
-        if (!alreadyBulleted) {
-            QTextCursor leader(m_document);
-            leader.setPosition(lineStart);
-            leader.insertText(bullet);
-        }
-        cursor.insertText(bullet);
-    }
     const int caret = cursor.position();
     cursor.endEditBlock();
     return caret;

@@ -30,7 +30,6 @@ private slots:
     void editorSavesAndReopens();
     void concurrentEditDoesNotOverwrite();
     void dateTagsRemainEditableAndUndoable();
-    void existingNotesGetBulletsOnOpen();
     void editorScrollsToCaret();
     void closeKeepsConflictingEdits();
     void editorPreservesUnusualText();
@@ -71,15 +70,6 @@ static bool createDatabase(const QString &path) {
     return ok;
 }
 
-static QString bulleted(const QString &text) {
-    QStringList lines = text.split(QLatin1Char('\n'));
-    for (QString &line : lines) {
-        if (!line.trimmed().isEmpty() && !line.trimmed().startsWith(QChar(0x2022)))
-            line.prepend(QStringLiteral("• "));
-    }
-    return lines.join(QLatin1Char('\n'));
-}
-
 void NativeTests::editorSavesAndReopens() {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
@@ -105,7 +95,7 @@ void NativeTests::editorSavesAndReopens() {
         QTest::keyClick(window, Qt::Key_D);
         QTest::keyClick(window, Qt::Key_E);
         QTest::keyClick(window, Qt::Key_D);
-        QTRY_COMPARE(backend.content(), QString("• test note added"));
+        QTRY_COMPARE(backend.content(), QString("test note added"));
         QTRY_COMPARE(backend.status(), QString("Saved on this device"));
         const QByteArray screenshot = qgetenv("JOT_NATIVE_TEST_SCREENSHOT");
         if (!screenshot.isEmpty()) {
@@ -115,7 +105,7 @@ void NativeTests::editorSavesAndReopens() {
     }
     Backend reopened(path);
     QVERIFY(reopened.ready());
-    QCOMPARE(reopened.content(), QString("• test note added"));
+    QCOMPARE(reopened.content(), QString("test note added"));
 }
 
 void NativeTests::concurrentEditDoesNotOverwrite() {
@@ -132,7 +122,7 @@ void NativeTests::concurrentEditDoesNotOverwrite() {
     QVERIFY(second.status().contains("changed in another process"));
     QCOMPARE(second.content(), QString("unsaved second edit"));
     Backend check(path);
-    QCOMPARE(check.content(), QString("• first edit"));
+    QCOMPARE(check.content(), QString("first edit"));
 }
 
 void NativeTests::dateTagsRemainEditableAndUndoable() {
@@ -155,15 +145,13 @@ void NativeTests::dateTagsRemainEditableAndUndoable() {
     const QString tag = QStringLiteral("  | %1 %2 %3").arg(today.day())
         .arg(QLocale::c().monthName(today.month(), QLocale::ShortFormat)).arg(today.year());
 
-    // Enter in the middle finishes the whole line without losing its suffix,
-    // prefixes the finished sentence with a bullet and starts the next line
-    // with its own bullet.
+    // Enter in the middle finishes the whole line without losing its suffix.
     editor->setProperty("text", QString::fromUtf8("hello 🖋 world  \nnext"));
     editor->setProperty("cursorPosition", 3);
     QTest::keyClick(window, Qt::Key_Return);
-    const QString finished = QStringLiteral("• hello 🖋 world") + tag + QStringLiteral("\n• \nnext");
+    const QString finished = QString::fromUtf8("hello 🖋 world") + tag + "\n\nnext";
     QTRY_COMPARE(backend.content(), finished);
-    QCOMPARE(editor->property("cursorPosition").toInt(), finished.indexOf('\n') + 3);
+    QCOMPARE(editor->property("cursorPosition").toInt(), finished.indexOf('\n') + 1);
 
     auto *quickDocument = qvariant_cast<QQuickTextDocument *>(editor->property("textDocument"));
     QVERIFY(quickDocument);
@@ -187,56 +175,24 @@ void NativeTests::dateTagsRemainEditableAndUndoable() {
     editor->setProperty("text", "old  | 1 Jan 2020");
     editor->setProperty("cursorPosition", 2);
     QTest::keyClick(window, Qt::Key_Return);
-    QTRY_COMPARE(backend.content(), QString("• old  | 1 Jan 2020\n• "));
+    QTRY_COMPARE(backend.content(), QString("old  | 1 Jan 2020\n"));
     editor->setProperty("cursorPosition", 0);
     QTest::keyClick(window, Qt::Key_X);
-    QTRY_COMPARE(backend.content(), QString("x• old  | 1 Jan 2020\n• "));
+    QTRY_COMPARE(backend.content(), QString("xold  | 1 Jan 2020\n"));
     QTest::keyClick(window, Qt::Key_Z, Qt::ControlModifier);
-    QTRY_COMPARE(backend.content(), QString("• old  | 1 Jan 2020\n• "));
+    QTRY_COMPARE(backend.content(), QString("old  | 1 Jan 2020\n"));
     // Older dot separators remain editable and are not silently rewritten.
     const QString legacy = QString::fromUtf8("legacy  · 1 Jan 2020");
     editor->setProperty("text", legacy);
     editor->setProperty("cursorPosition", 3);
     QTest::keyClick(window, Qt::Key_Return);
-    QTRY_COMPARE(backend.content(), QStringLiteral("• ") + legacy + QStringLiteral("\n• "));
+    QTRY_COMPARE(backend.content(), legacy + "\n");
     QTRY_VERIFY(!document->firstBlock().layout()->formats().isEmpty());
     QCOMPARE(document->firstBlock().layout()->formats().first().format.foreground().color(),
              QColor("#87a9b0"));
     QVERIFY(backend.flush());
     Backend reopened(path);
-    QCOMPARE(reopened.content(), QStringLiteral("• ") + legacy + QStringLiteral("\n• "));
-}
-
-void NativeTests::existingNotesGetBulletsOnOpen() {
-    QTemporaryDir dir;
-    QVERIFY(dir.isValid());
-    const QString path = dir.filePath("pad.db");
-    QVERIFY(createDatabase(path));
-    {
-        QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", QStringLiteral("bullets"));
-        db.setDatabaseName(path);
-        QVERIFY(db.open());
-        QSqlQuery query(db);
-        QVERIFY(query.prepare("UPDATE pad SET content = ?1 WHERE id = 1"));
-        query.addBindValue(QStringLiteral("first\n\nsecond  | 1 Jan 2020"));
-        QVERIFY(query.exec());
-        db.close();
-    }
-    QSqlDatabase::removeDatabase(QStringLiteral("bullets"));
-
-    Backend backend(path);
-    QVERIFY(backend.ready());
-    const QString expected = QStringLiteral("• first\n\n• second  | 1 Jan 2020");
-    QCOMPARE(backend.content(), expected);
-    // The migration is written locally so it survives a restart.
-    Backend reopened(path);
-    QCOMPARE(reopened.content(), expected);
-
-    // Existing bullets are never doubled, and a later bare line gains one.
-    backend.edit(QStringLiteral("• already\nstill bare"));
-    QVERIFY(backend.flush());
-    Backend again(path);
-    QCOMPARE(again.content(), QStringLiteral("• already\n• still bare"));
+    QCOMPARE(reopened.content(), legacy + "\n");
 }
 
 void NativeTests::editorScrollsToCaret() {
@@ -255,7 +211,7 @@ void NativeTests::editorScrollsToCaret() {
     auto *scroll = window->findChild<QQuickItem *>("editorScroll");
     QVERIFY(editor && scroll);
     QStringList lines;
-    for (int i = 0; i < 80; ++i) lines << QStringLiteral("• line %1").arg(i);
+    for (int i = 0; i < 80; ++i) lines << QStringLiteral("line %1").arg(i);
     const QString text = lines.join(QLatin1Char('\n'));
     editor->setProperty("text", text);
     QTRY_COMPARE(backend.content(), text);
@@ -271,7 +227,7 @@ void NativeTests::editorScrollsToCaret() {
     QVERIFY(origin.y() + caret.y() + caret.height() <= scroll->height() + 1.0);
 
     // Typing at the bottom must keep the new caret line fully visible too.
-    const QString withLast = text + QStringLiteral("\n• last line");
+    const QString withLast = text + QStringLiteral("\nlast line");
     editor->setProperty("text", withLast);
     QTRY_COMPARE(backend.content(), withLast);
     editor->setProperty("cursorPosition", withLast.size());
@@ -312,7 +268,6 @@ void NativeTests::editorPreservesUnusualText() {
     QVERIFY(createDatabase(path));
     const QString original = QString::fromUtf8("literal <b>html</b>  🖋\nnonbreaking")
         + QChar(0x00a0) + QStringLiteral("space\n");
-    const QString normalized = bulleted(original);
     {
         Backend writer(path);
         writer.edit(original);
@@ -333,16 +288,16 @@ void NativeTests::editorPreservesUnusualText() {
     editor->forceActiveFocus();
     QTest::keyClick(window, Qt::Key_End, Qt::ControlModifier);
     QTest::keyClick(window, Qt::Key_X);
-    QTRY_COMPARE(backend.content(), normalized + "x");
+    QTRY_COMPARE(backend.content(), original + "x");
     QVERIFY(backend.flush());
     Backend reopened(path);
-    QCOMPARE(reopened.content(), normalized + QStringLiteral("• x"));
-    const int spaceIndex = normalized.indexOf(QChar(0x00a0));
+    QCOMPARE(reopened.content(), original + "x");
+    const int spaceIndex = original.indexOf(QChar(0x00a0));
     QVERIFY(spaceIndex >= 0);
     editor->setProperty("cursorPosition", spaceIndex);
     QTest::keyClick(window, Qt::Key_Delete);
     QTest::keyClick(window, Qt::Key_Space);
-    QString replaced = normalized + "x";
+    QString replaced = original + "x";
     replaced[spaceIndex] = QLatin1Char(' ');
     QTRY_COMPARE(backend.content(), replaced);
 }
@@ -395,7 +350,7 @@ void NativeTests::invalidUtf16IsNotSavedOrCleared() {
     QVERIFY(!backend.clearPad());
     QCOMPARE(backend.content(), invalid);
     Backend reopened(path);
-    QCOMPARE(reopened.content(), QString("• test note"));
+    QCOMPARE(reopened.content(), QString("test note"));
     QVERIFY(!reopened.canUndoClear());
 }
 
@@ -514,7 +469,7 @@ void NativeTests::settingsClearAndUndo() {
         QVERIFY(!backend.canUndoClear());
     }
     Backend reopened(path);
-    QCOMPARE(reopened.content(), bulleted(original));
+    QCOMPARE(reopened.content(), original);
     QVERIFY(!reopened.canUndoClear());
 }
 
@@ -539,7 +494,7 @@ void NativeTests::clearConflictPreservesPendingText() {
     QCOMPARE(editor->property("text").toString(), QString("pending local text"));
     QVERIFY(backend.status().contains("changed in another process"));
     Backend reopened(path);
-    QCOMPARE(reopened.content(), QString("• other process text"));
+    QCOMPARE(reopened.content(), QString("other process text"));
 }
 
 void NativeTests::undoConflictPreservesBothCopies() {
@@ -562,14 +517,14 @@ void NativeTests::undoConflictPreservesBothCopies() {
     QCOMPARE(backend.content(), QString());
     QVERIFY(backend.status().contains("changed"));
     Backend reopened(path);
-    QCOMPARE(reopened.content(), QString("• newer notes"));
+    QCOMPARE(reopened.content(), QString("newer notes"));
     char *error = nullptr;
     const QByteArray pathBytes = path.toUtf8();
     JotCorePad *core = jot_core_open(pathBytes.constData(), &error);
     QVERIFY(core);
     char *backup = jot_core_last_cleared(core, &error);
     QVERIFY(backup);
-    QCOMPARE(QString::fromUtf8(backup), QString("• test note"));
+    QCOMPARE(QString::fromUtf8(backup), QString("test note"));
     jot_core_string_free(backup);
     jot_core_close(core);
 }
@@ -649,11 +604,11 @@ void NativeTests::escapeSavesAndHides() {
     QTRY_VERIFY(editor->hasActiveFocus());
     QTest::keyClick(window, Qt::Key_End, Qt::ControlModifier);
     QTest::keyClick(window, Qt::Key_X);
-    QTRY_COMPARE(backend.content(), QString("• test notex"));
+    QTRY_COMPARE(backend.content(), QString("test notex"));
     QTest::keyClick(window, Qt::Key_Escape);
     QTRY_VERIFY(!window->isVisible());
     Backend reopened(path);
-    QCOMPARE(reopened.content(), QString("• test notex"));
+    QCOMPARE(reopened.content(), QString("test notex"));
 }
 
 void NativeTests::hotkeyHelpUsesDisposableConfig() {
@@ -708,7 +663,8 @@ void NativeTests::savingBadgeStates() {
     QCOMPARE(gear->height(), 17);
     QCOMPARE(localBadge->width(), 36);
     QCOMPARE(cloudBadgeItem->width(), 48);
-    QCOMPARE(cloudBadgeItem->x(), localBadge->x() + localBadge->width() + 4);
+    QCOMPARE(cloudBadgeItem->x(), 0);
+    QCOMPARE(localBadge->x(), cloudBadgeItem->x() + cloudBadgeItem->width() + 4);
     QCOMPARE(localTickItem->x(), monitor->x() + monitor->width() + 3);
     QVERIFY(!window->findChild<QObject *>("cloudSpinner"));
     QVERIFY(!window->findChild<QObject *>("cloudTick"));
@@ -832,7 +788,7 @@ void NativeTests::cloudOnlySyncsOnHide() {
     QVERIFY(jot_cloud_sign_in(email.constData(), password.constData(), &error));
 
     // Start from a deterministic cloud pad and no local baseline.
-    const QString base = QStringLiteral("• sync-on-hide-base");
+    const QString base = QStringLiteral("sync-on-hide-base");
     const QString typed = base + QStringLiteral(" typed while local");
     char *content = nullptr;
     char *updated = nullptr;
@@ -941,7 +897,7 @@ void NativeTests::cloudTypingDuringSyncIsNotLost() {
     QVERIFY(jot_cloud_configure(url.constData(), key.constData(), &error));
     QVERIFY(jot_cloud_sign_in(email.constData(), password.constData(), &error));
 
-    const QString base = QStringLiteral("• sync-race-base");
+    const QString base = QStringLiteral("sync-race-base");
     const QString typed = base + QStringLiteral(" typed during sync");
     char *content = nullptr;
     char *updated = nullptr;
@@ -1036,7 +992,7 @@ void NativeTests::cloudQuitSyncsBeforeQuitting() {
     QVERIFY(jot_cloud_configure(url.constData(), key.constData(), &error));
     QVERIFY(jot_cloud_sign_in(email.constData(), password.constData(), &error));
 
-    const QString base = QStringLiteral("• sync-before-quit-base");
+    const QString base = QStringLiteral("sync-before-quit-base");
     const QString typed = base + QStringLiteral(" quit text");
     char *content = nullptr;
     char *updated = nullptr;
