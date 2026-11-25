@@ -32,8 +32,8 @@ gap between the cloud and device icons and the gap between the device icon and
 its spinner/tick are both 5px; the cloud badge itself is a static icon. The gear is a
 circular 17px icon in the same `#b59790` accent as the date, at full opacity;
 it sits inside an Item wrapper so the Button cannot stretch it. Hovering either
-badge shows a delayed, fully opaque black tooltip in the same monospace 13px
-font (220ms delay, 4s timeout), clamped inside the window. The editor has 10px
+badge shows a fully opaque black tooltip in the same monospace 13px font
+(immediate on hover, 4s timeout), clamped inside the window. The editor has 10px
 top and 16px side padding below the header divider, scrolls to keep the caret
 line fully visible (8px bottom margin), and never leaves half a line cut off at
 the bottom. Enter finishes the current line with its inline date tag. The

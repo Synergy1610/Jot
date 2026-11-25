@@ -662,19 +662,19 @@ void NativeTests::savingBadgeStates() {
             && localTickItem && iconsItem);
     QCOMPARE(gear->width(), 17);
     QCOMPARE(gear->height(), 17);
-    QCOMPARE(localBadge->width(), 37);
+    QCOMPARE(localBadge->width(), 40);
     QCOMPARE(cloudBadgeItem->width(), 21);
     QCOMPARE(cloudBadgeItem->x(), 0);
     QCOMPARE(localBadge->x(), cloudBadgeItem->x() + cloudBadgeItem->width());
     const qreal cloudIconRight = cloudIconItem->mapToItem(iconsItem, QPointF(0, 0)).x()
         + cloudIconItem->width();
     const qreal monitorLeft = monitor->mapToItem(iconsItem, QPointF(0, 0)).x();
-    QCOMPARE(monitorLeft - cloudIconRight, 5);
+    QCOMPARE(monitorLeft - cloudIconRight, 8);
     QCOMPARE(localTickItem->x(), monitor->x() + monitor->width() + 5);
     const QPointF groupCenter = iconsItem->mapToItem(
         window->contentItem(), QPointF(iconsItem->width() / 2, iconsItem->height() / 2));
-    QVERIFY(groupCenter.x() > window->width() / 2);
-    QVERIFY(groupCenter.x() < window->width() / 2 + 48);
+    QVERIFY(groupCenter.x() > window->width() / 2 + 30);
+    QVERIFY(groupCenter.x() < window->width() / 2 + 80);
     QVERIFY(!window->findChild<QObject *>("cloudSpinner"));
     QVERIFY(!window->findChild<QObject *>("cloudTick"));
 
@@ -726,6 +726,23 @@ void NativeTests::savingBadgeStates() {
     if (!cloudShot.isEmpty())
         QVERIFY(window->grabWindow().save(QString::fromUtf8(cloudShot)));
     icons->setProperty("tipVisible", false);
+
+    // Real hover events must show the matching tooltip for each badge.
+    const QPointF cloudCenter = cloudBadgeItem->mapToItem(window->contentItem(),
+        QPointF(cloudBadgeItem->width() / 2, cloudBadgeItem->height() / 2));
+    QTest::mouseMove(window, cloudCenter.toPoint());
+    QTRY_VERIFY_WITH_TIMEOUT(tooltip->property("visible").toBool(), 2000);
+    QVERIFY(tipTextItem->property("text").toString().contains(QStringLiteral("Cloud")));
+    const QByteArray hoverShot = qgetenv("JOT_NATIVE_HOVER_TOOLTIP_SCREENSHOT");
+    if (!hoverShot.isEmpty())
+        QVERIFY(window->grabWindow().save(QString::fromUtf8(hoverShot)));
+    const QPointF deviceCenter = localBadge->mapToItem(window->contentItem(),
+        QPointF(localBadge->width() / 2, localBadge->height() / 2));
+    QTest::mouseMove(window, deviceCenter.toPoint());
+    QTRY_VERIFY_WITH_TIMEOUT(
+        tipTextItem->property("text").toString().contains(QStringLiteral("device")), 2000);
+    QTest::mouseMove(window, QPoint(10, 200));
+    QVERIFY(!tooltip->property("visible").toBool());
 
     QVERIFY(backend.flush());
     QVERIFY(!backend.saving());

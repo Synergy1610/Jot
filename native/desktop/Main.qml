@@ -159,7 +159,7 @@ ApplicationWindow {
 
                 Label {
                     Layout.fillWidth: true
-                    Layout.preferredWidth: 17
+                    Layout.preferredWidth: 21
                     color: "#b59790"
                     font.family: "monospace"
                     font.pixelSize: 12
@@ -169,7 +169,7 @@ ApplicationWindow {
                 Item {
                     id: statusIcons
                     objectName: "statusIcons"
-                    Layout.preferredWidth: 58
+                    Layout.preferredWidth: 61
                     Layout.preferredHeight: 30
                     Layout.alignment: Qt.AlignVCenter
 
@@ -180,29 +180,21 @@ ApplicationWindow {
                     property real tooltipRightEdge: badgeTooltip.x + badgeTooltip.width
 
                     function showTip(badge, text) {
+                        if (!text) text = qsTr("Cloud backup")
                         hoveredBadge = badge
                         tipText = text
-                        tipDelay.restart()
-                        tipHide.stop()
+                        tipVisible = true
+                        tipHide.restart()
                     }
-                    function hideTip() {
+                    function hideTip(badge) {
+                        // A leave event from the previously hovered badge must
+                        // not clear a tooltip that another badge just showed.
+                        if (badge && hoveredBadge !== badge) return
                         hoveredBadge = null
-                        tipDelay.stop()
                         tipHide.stop()
                         tipVisible = false
                     }
 
-                    Timer {
-                        id: tipDelay
-                        interval: 220
-                        repeat: false
-                        onTriggered: {
-                            if (statusIcons.hoveredBadge) {
-                                statusIcons.tipVisible = true
-                                tipHide.restart()
-                            }
-                        }
-                    }
                     Timer {
                         id: tipHide
                         interval: 4000
@@ -215,16 +207,16 @@ ApplicationWindow {
                         objectName: "localBadge"
                         anchors.left: cloudBadge.right
                         anchors.verticalCenter: parent.verticalCenter
-                        width: 37
+                        width: 40
                         height: 30
                         padding: 0
                         hoverEnabled: true
                         Accessible.name: backend.localTooltip
                         background: null
                         onHoveredChanged: hovered ? statusIcons.showTip(localBadge, backend.localTooltip)
-                                                  : statusIcons.hideTip()
+                                                  : statusIcons.hideTip(localBadge)
                         onActiveFocusChanged: activeFocus ? statusIcons.showTip(localBadge, backend.localTooltip)
-                                                          : statusIcons.hideTip()
+                                                          : statusIcons.hideTip(localBadge)
                         contentItem: Item {
                             Canvas {
                                 id: monitorIcon
@@ -232,7 +224,7 @@ ApplicationWindow {
                                 width: 15
                                 height: 15
                                 anchors.left: parent.left
-                                anchors.leftMargin: 5
+                                anchors.leftMargin: 8
                                 anchors.verticalCenter: parent.verticalCenter
                                 onPaint: {
                                     const ctx = getContext("2d")
@@ -289,9 +281,9 @@ ApplicationWindow {
                         Accessible.name: backend.cloudTooltip
                         background: null
                         onHoveredChanged: hovered ? statusIcons.showTip(cloudBadge, backend.cloudTooltip)
-                                                  : statusIcons.hideTip()
+                                                  : statusIcons.hideTip(cloudBadge)
                         onActiveFocusChanged: activeFocus ? statusIcons.showTip(cloudBadge, backend.cloudTooltip)
-                                                          : statusIcons.hideTip()
+                                                          : statusIcons.hideTip(cloudBadge)
                         contentItem: Item {
                             Canvas {
                                 id: cloudIcon
@@ -361,7 +353,7 @@ ApplicationWindow {
 
                 Item {
                     Layout.fillWidth: true
-                    Layout.preferredWidth: 10
+                    Layout.preferredWidth: 9
                 }
 
                 ToolButton {
