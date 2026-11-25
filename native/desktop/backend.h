@@ -91,9 +91,11 @@ public:
     Q_INVOKABLE void cloudSignOut();
     Q_INVOKABLE void cloudSyncNow();
     Q_INVOKABLE void cloudPull();
-    Q_INVOKABLE bool syncBeforeHide();
+    Q_INVOKABLE void syncAfterHide();
+    Q_INVOKABLE void quitAfterSync();
     bool backupTo(const QString &path);
     bool migrateLegacy();
+    bool normalizeEntries();
 
 signals:
     void contentChanged();
@@ -102,6 +104,7 @@ signals:
     void trayAvailableChanged();
     void cloudChanged();
     void cloudTaskFinished();
+    void readyToQuit();
 
 private:
     void setStatus(const QString &status);
@@ -115,7 +118,8 @@ private:
     void beginCloudSaving();
     void endCloudSaving();
     void afterCloudSavingEnds();
-    bool waitForCloudEvent(int timeoutMs);
+    void requestCloudSync();
+    void maybeFinishQuit();
     void startCloudSync();
     void onCloudFinished(const CloudResult &result);
     static QString takeError(char *error);
@@ -138,8 +142,12 @@ private:
     QString m_cloudStatus;
     QThread *m_cloudThread = nullptr;
     CloudWorker *m_cloudWorker = nullptr;
+    QTimer m_quitTimer;
     QString m_cloudRequestContent;
     QElapsedTimer m_cloudSavingElapsed;
+    bool m_cloudSyncPending = false;
+    bool m_quitPending = false;
+    bool m_quitReadyEmitted = false;
     QPointer<QTextDocument> m_document;
     Hotkey m_hotkey;
 };

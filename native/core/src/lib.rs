@@ -13,7 +13,7 @@ use std::time::Duration;
 
 mod cloud;
 
-use cloud::Cloud;
+use cloud::{normalize_entries, Cloud};
 use std::sync::{Mutex, OnceLock};
 
 static CLOUD: OnceLock<Mutex<Cloud>> = OnceLock::new();
@@ -525,6 +525,16 @@ pub unsafe extern "C" fn jot_core_close(pad: *mut Pad) {
 pub unsafe extern "C" fn jot_core_string_free(value: *mut c_char) {
     if !value.is_null() {
         drop(CString::from_raw(value));
+    }
+}
+
+/// Prefix a bullet to every non-empty entry that lacks one. Idempotent, so
+/// callers can apply it on load and after edits without duplicating bullets.
+#[no_mangle]
+pub unsafe extern "C" fn jot_core_normalize_entries(content: *const c_char) -> *mut c_char {
+    match input(content) {
+        Ok(text) => into_c_string(&normalize_entries(text)),
+        Err(_) => ptr::null_mut(),
     }
 }
 

@@ -68,9 +68,30 @@ ApplicationWindow {
             close.accepted = false
             return
         }
+        // Let the window close immediately, then finish the cloud backup
+        // while the process exits invisibly.
+        close.accepted = true
         if (backend.ready)
-            backend.syncBeforeHide()
-        Qt.callLater(Qt.quit)
+            backend.quitAfterSync()
+        else
+            Qt.callLater(Qt.quit)
+    }
+
+    // Keep the caret line fully visible. Qt's TextArea does not reliably
+    // follow the caret when the content grows, which leaves half a line cut
+    // off at the bottom of the window.
+    function ensureCaretVisible() {
+        const flick = editorScroll.contentItem
+        if (!flick || !editor || flick.contentY === undefined) return
+        const margin = 8
+        const caret = editor.cursorRectangle
+        const caretTop = caret.y
+        const caretBottom = caret.y + caret.height
+        const maxY = Math.max(0, flick.contentHeight - flick.height)
+        if (caretBottom > flick.contentY + flick.height - margin)
+            flick.contentY = Math.min(maxY, caretBottom - flick.height + margin)
+        else if (caretTop < flick.contentY + margin)
+            flick.contentY = Math.max(0, caretTop - margin)
     }
 
     function handleCommand(command) {
@@ -96,13 +117,19 @@ ApplicationWindow {
                     handleCommand("show")
                 return "error " + backend.status
             }
-            if (backend.ready)
-                backend.syncBeforeHide()
             if (command === "hide") {
                 hide()
+                if (backend.ready)
+                    backend.syncAfterHide()
                 return "ok hidden"
             }
-            Qt.callLater(Qt.quit)
+            // Quitting hides the window immediately and lets the backup finish
+            // before the process exits.
+            hide()
+            if (backend.ready)
+                backend.quitAfterSync()
+            else
+                Qt.callLater(Qt.quit)
             return "ok quitting"
         }
         return "error unknown command"
@@ -367,6 +394,8 @@ ApplicationWindow {
         }
 
         ScrollView {
+            id: editorScroll
+            objectName: "editorScroll"
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
@@ -384,21 +413,26 @@ ApplicationWindow {
                 wrapMode: TextEdit.Wrap
                 placeholderText: qsTr("Start typing…")
                 topPadding: 10
+                bottomPadding: 12
                 leftPadding: 16
                 rightPadding: 16
                 background: null
+                onCursorRectangleChanged: window.ensureCaretVisible()
+                onContentHeightChanged: window.ensureCaretVisible()
                 Keys.onPressed: function(event) {
                     if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
                         const caret = backend.finishLine(selectionStart, selectionEnd)
                         if (caret >= 0) {
                             cursorPosition = caret
                             event.accepted = true
+                            Qt.callLater(window.ensureCaretVisible)
                         }
                     }
                 }
                 Component.onCompleted: {
                     backend.attachEditor(textDocument)
                     forceActiveFocus()
+                    Qt.callLater(window.ensureCaretVisible)
                 }
             }
         }

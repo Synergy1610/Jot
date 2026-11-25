@@ -28,9 +28,9 @@ LEGACY = (
 # appends a new tag before the separator upgrade runs, so a "·" tag that is no
 # longer at end of line stays untouched. That is intentional parity.
 EXPECTED = (
-    "archive line\n"
-    "first entry  | 19 Nov 2026\n"
-    "second  · 3 Feb 2021  | 19 Nov 2026"
+    "• archive line\n"
+    "• first entry  | 19 Nov 2026\n"
+    "• second  · 3 Feb 2021  | 19 Nov 2026"
 )
 
 

@@ -1,7 +1,6 @@
 #include "backend.h"
 
 #include <QElapsedTimer>
-#include <QEventLoop>
 #include <QByteArray>
 #include <QClipboard>
 #include <QDate>
@@ -65,6 +64,11 @@ Backend::Backend(const QString &databasePath, QObject *parent)
     connect(&m_timer, &QTimer::timeout, this, &Backend::flush);
     setStatus(tr("Saved on this device"));
     refreshUndo();
+#ifndef JOT_PRODUCTION
+    // The prototype has no legacy migration pass; the production entry point
+    // calls this after migrateLegacy() instead.
+    normalizeEntries();
+#endif
 
     qRegisterMetaType<CloudResult>("CloudResult");
     m_cloudThread = new QThread(this);
@@ -73,6 +77,13 @@ Backend::Backend(const QString &databasePath, QObject *parent)
     connect(m_cloudWorker, &CloudWorker::finished, this, &Backend::onCloudFinished);
     connect(m_cloudThread, &QThread::finished, m_cloudWorker, &QObject::deleteLater);
     m_cloudThread->start();
+    m_quitTimer.setSingleShot(true);
+    connect(&m_quitTimer, &QTimer::timeout, this, [this] {
+        // A dead network must never keep a hidden window's process alive.
+        if (!m_quitPending || m_quitReadyEmitted) return;
+        m_quitReadyEmitted = true;
+        emit readyToQuit();
+    });
     QTimer::singleShot(0, this, &Backend::loadCloudConfig);
 }
 
@@ -148,6 +159,31 @@ bool Backend::migrateLegacy() {
     return true;
 }
 
+// Called after legacy migration, before the editor is shown. Prefixes every
+// non-empty entry with a bullet and saves the result locally once.
+bool Backend::normalizeEntries() {
+    if (!ready()) return false;
+    const QByteArray loaded = m_saved.toUtf8();
+    char *normalized = jot_core_normalize_entries(loaded.constData());
+    if (!normalized) return false;
+    const QString candidate = QString::fromUtf8(normalized);
+    jot_core_string_free(normalized);
+    if (candidate == m_saved) return true;
+    // Leave notes the editor cannot represent untouched.
+    if (candidate.contains(QChar::Null) || !candidate.isValidUtf16()
+        || candidate.contains(QLatin1Char('\r')))
+        return false;
+    char *error = nullptr;
+    const QByteArray current = candidate.toUtf8();
+    if (!jot_core_save(m_pad, loaded.constData(), current.constData(), &error)) {
+        if (error) jot_core_string_free(error);
+        return false;
+    }
+    m_saved = m_content = candidate;
+    emit contentChanged();
+    return true;
+}
+
 void Backend::finishCloud(bool ok, const QString &message) {
     m_cloudStatus = message;
     m_cloudSaved = ok && m_cloudSignedIn;
@@ -163,6 +199,11 @@ void Backend::beginCloudSaving() {
 
 void Backend::afterCloudSavingEnds() {
     emit cloudChanged();
+    if (m_cloudSyncPending) {
+        m_cloudSyncPending = false;
+        if (m_cloudSignedIn && !m_cloudTaskActive) startCloudSync();
+    }
+    maybeFinishQuit();
 }
 
 void Backend::endCloudSaving() {
@@ -179,59 +220,43 @@ void Backend::endCloudSaving() {
     });
 }
 
-bool Backend::waitForCloudEvent(int timeoutMs) {
-    QEventLoop loop;
-    QTimer timer;
-    bool signalled = false;
-    timer.setSingleShot(true);
-    const auto finished = connect(this, &Backend::cloudTaskFinished, &loop, [&] {
-        signalled = true;
-        loop.quit();
-    });
-    const auto changed = connect(this, &Backend::cloudChanged, &loop, [&] {
-        signalled = true;
-        loop.quit();
-    });
-    connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
-    timer.start(qMax(1, timeoutMs));
-    loop.exec();
-    disconnect(finished);
-    disconnect(changed);
-    return signalled;
+void Backend::requestCloudSync() {
+    if (!m_cloudSignedIn) return;
+    if (m_cloudSaving || m_cloudTaskActive) {
+        m_cloudSyncPending = true;
+        return;
+    }
+    startCloudSync();
 }
 
-// Hide and quit are the only automatic sync points. Local notes are flushed
-// first, then one bounded cloud request runs while the window is still up, so
-// shutdown cannot hang on a slow network and typing never races an upload.
-bool Backend::syncBeforeHide() {
-    if (!flush()) return false;
-    if (!m_cloudSignedIn) return true;
+// Called after the window has already been hidden. The cloud request runs on
+// the worker thread, so hiding is instant even when the network is slow.
+void Backend::syncAfterHide() {
+    requestCloudSync();
+}
 
-    QElapsedTimer total;
-    total.start();
-    // The local command socket waits 5s for a reply, so keep the blocking
-    // cloud attempt below that; anything slower is retried on the next hide.
-    const int budget = 4000;
-    const auto remaining = [&] { return qMax(0, budget - int(total.elapsed())); };
-
-    // Finish a startup or manual task so its result is not discarded.
-    while ((m_cloudTaskActive || m_cloudSaving) && remaining() > 0) {
-        if (!waitForCloudEvent(remaining())) break;
+// Hide first, then sync, then let the event loop quit. The window is gone
+// immediately; the process may finish the backup invisibly for a moment.
+void Backend::quitAfterSync() {
+    if (m_quitPending) return;
+    m_quitPending = true;
+    m_quitReadyEmitted = false;
+    if (!m_cloudSignedIn) {
+        m_quitReadyEmitted = true;
+        emit readyToQuit();
+        return;
     }
-    // Always contact the cloud on hide/quit so notes written on another device
-    // are picked up even when this device has nothing new to push.
-    if (m_cloudSignedIn && !m_cloudTaskActive && !m_cloudSaving && remaining() > 0) {
-        startCloudSync();
-        while (m_cloudTaskActive && remaining() > 0) {
-            if (!waitForCloudEvent(remaining())) break;
-        }
-    }
-    if (m_cloudSaved) return true;
+    m_quitTimer.start(2500);
+    requestCloudSync();
+    maybeFinishQuit();
+}
 
-    if (m_cloudStatus.isEmpty())
-        m_cloudStatus = tr("Cloud backup will retry the next time you hide or quit");
-    emit cloudChanged();
-    return false;
+void Backend::maybeFinishQuit() {
+    if (!m_quitPending || m_quitReadyEmitted) return;
+    if (m_cloudTaskActive || m_cloudSyncPending) return;
+    m_quitReadyEmitted = true;
+    m_quitTimer.stop();
+    emit readyToQuit();
 }
 
 void Backend::refreshCloudAccount() {
@@ -348,6 +373,7 @@ void Backend::onCloudFinished(const CloudResult &result) {
     }
     endCloudSaving();
     emit cloudTaskFinished();
+    maybeFinishQuit();
 }
 
 void Backend::cloudSignIn(const QString &email, const QString &password) {
@@ -372,7 +398,7 @@ void Backend::cloudSignOut() {
 
 void Backend::cloudSyncNow() {
     if (!flush()) return;
-    startCloudSync();
+    requestCloudSync();
 }
 
 void Backend::cloudPull() {
@@ -567,6 +593,10 @@ int Backend::finishLine(int selectionStart, int selectionEnd) {
     static const QRegularExpression tag(
         QStringLiteral(R"(\s*[|·]\s+\d{1,2}\s+[A-Za-z]{3}\s+\d{4}\s*$)"),
         QRegularExpression::UseUnicodePropertiesOption);
+    const QString content = line.trimmed();
+    const bool hasText = !content.isEmpty() && content != QStringLiteral("•");
+    const bool alreadyBulleted = content.startsWith(QChar(0x2022));
+    static const QString bullet = QStringLiteral("• ");
 
     QTextCursor cursor(m_document);
     cursor.beginEditBlock();
@@ -585,6 +615,16 @@ int Backend::finishLine(int selectionStart, int selectionEnd) {
             .arg(today.year()));
     }
     cursor.insertBlock();
+    if (hasText) {
+        // Bullet the sentence that was just finished, then start the new line
+        // with its own bullet. Inserting before the cursor shifts it safely.
+        if (!alreadyBulleted) {
+            QTextCursor leader(m_document);
+            leader.setPosition(lineStart);
+            leader.insertText(bullet);
+        }
+        cursor.insertText(bullet);
+    }
     const int caret = cursor.position();
     cursor.endEditBlock();
     return caret;
