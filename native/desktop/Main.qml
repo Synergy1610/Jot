@@ -154,12 +154,11 @@ ApplicationWindow {
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: 16
-                anchors.rightMargin: 16
+                anchors.rightMargin: 8
                 spacing: 8
 
                 Label {
                     Layout.fillWidth: true
-                    Layout.preferredWidth: 82
                     color: "#b59790"
                     font.family: "monospace"
                     font.pixelSize: 12
@@ -349,11 +348,6 @@ ApplicationWindow {
                             font.pixelSize: 13
                         }
                     }
-                }
-
-                Item {
-                    Layout.fillWidth: true
-                    Layout.preferredWidth: 9
                 }
 
                 ToolButton {

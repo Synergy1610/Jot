@@ -27,7 +27,7 @@ the Account, Hotkey (Linux / Hyprland), Clear pad and About sections and the
 
 The header has a 1px divider, 16px side padding, a smaller gear icon, and
 status badges with room to spare: the cloud badge (21px) comes first, then the
-device badge (40px), with the group at about the 75% mark of the header. The
+device badge (40px), with the group at about the 85% mark of the header. The
 gap between the cloud and device icons is 8px and the gap between the device
 icon and its spinner/tick is 5px; the cloud badge itself is a static icon. The gear is a
 circular 17px icon in the same `#b59790` accent as the date, at full opacity;
