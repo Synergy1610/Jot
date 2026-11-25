@@ -68,7 +68,7 @@ public:
             || m_cloudStatus.contains(tr("failed"), Qt::CaseInsensitive)
             || m_cloudStatus.contains(tr("Could not"), Qt::CaseInsensitive))
             return tr("Cloud backup needs attention — see settings");
-        return m_cloudSaved ? tr("Backed up to the cloud") : tr("Cloud backup pending — see settings");
+        return m_cloudSaved ? tr("Backed up to the cloud") : tr("Cloud backup pending — hide Jot to sync");
     }
     bool localError() const { return m_loaded && m_content != m_saved && !m_timer.isActive(); }
     QString localTooltip() const {
@@ -97,6 +97,7 @@ public:
     Q_INVOKABLE void cloudSignOut();
     Q_INVOKABLE void cloudSyncNow();
     Q_INVOKABLE void cloudPull();
+    Q_INVOKABLE bool syncBeforeHide();
     bool backupTo(const QString &path);
     bool migrateLegacy();
 
@@ -106,6 +107,7 @@ signals:
     void undoChanged();
     void trayAvailableChanged();
     void cloudChanged();
+    void cloudTaskFinished();
 
 private:
     void setStatus(const QString &status);
@@ -119,7 +121,7 @@ private:
     void beginCloudSaving();
     void endCloudSaving();
     void afterCloudSavingEnds();
-    void scheduleCloudSync();
+    bool waitForCloudEvent(int timeoutMs);
     void startCloudSync();
     void onCloudFinished(const CloudResult &result);
     static QString takeError(char *error);
@@ -134,6 +136,7 @@ private:
     bool m_startHidden = false;
     bool m_trayAvailable = false;
     bool m_cloudSaving = false;
+    bool m_cloudTaskActive = false;
     bool m_cloudSaved = false;
     bool m_cloudSignedIn = false;
     qlonglong m_cloudVersion = 0;

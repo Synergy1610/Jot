@@ -152,10 +152,13 @@ from the icon as the device badge. The help page has a back button, and the
 device icon stays in the accent colour while saving — the spinner alone shows
 activity.
 
-Cloud work runs on a dedicated worker thread with a 10s network timeout, and
-automatic backups are debounced by 1.5s and coalesced, so typing never blocks
-on Supabase. The cloud spinner stays visible for at least 600ms so a fast
-request is still noticeable.
+Cloud work runs on a dedicated worker thread with a 10s network timeout.
+Syncing is event-driven: typing only autosaves locally, and the cloud is
+contacted when Jot opens, when it is hidden (Super+W), and when it quits. Hide
+and quit flush local notes first, then make one bounded cloud attempt (4s) so
+shutdown cannot hang; a failure keeps local notes and retries on the next
+hide/quit, and the Settings "Back up now" button can sync on demand. The cloud
+spinner stays visible for at least 600ms so a fast request is still noticeable.
 
 Sync uses an append-only three-way merge. Each device keeps a 0600 base file
 with the last synced content/version. On sync: no base means all local text is
@@ -165,14 +168,14 @@ cloud unchanged from the base means the other side is pulled or pushed; an
 append-only local change is appended to the cloud pad; both sides edited
 differently is a conflict and nothing is overwritten. After a merge the
 combined pad is applied locally so the user can review it, and only the newly
-added prefix is inserted so the caret and undo history survive. If an upload
+added prefix is inserted so the caret and undo history survive. If a sync
 finishes while the user is still typing, its merged snapshot is not applied:
-the newer text is kept and another sync is queued.
+the newer text is kept and the next hide/quit syncs it.
 
 Live verification on a disposable test user: sign-in, download, conflict-safe
 upload, append-only merge, duplicate-free re-sign-in, typing during an upload,
-round-trip and sign-out all passed, and the keyring entry is removed on
-sign-out.
+sync-on-hide, round-trip and sign-out all passed, and the keyring entry is
+removed on sign-out.
 
 ## Remaining work
 

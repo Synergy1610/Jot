@@ -1,5 +1,7 @@
 #include "backend.h"
 
+#include <QElapsedTimer>
+#include <QEventLoop>
 #include <QByteArray>
 #include <QClipboard>
 #include <QDate>
@@ -72,7 +74,7 @@ Backend::Backend(const QString &databasePath, QObject *parent)
     connect(m_cloudThread, &QThread::finished, m_cloudWorker, &QObject::deleteLater);
     m_cloudThread->start();
     m_cloudSyncTimer.setSingleShot(true);
-    m_cloudSyncTimer.setInterval(1500);
+    m_cloudSyncTimer.setInterval(0);
     connect(&m_cloudSyncTimer, &QTimer::timeout, this, &Backend::startCloudSync);
     QTimer::singleShot(0, this, &Backend::loadCloudConfig);
 }
@@ -149,6 +151,7 @@ void Backend::finishCloud(bool ok, const QString &message) {
 
 void Backend::beginCloudSaving() {
     m_cloudSaving = true;
+    m_cloudTaskActive = true;
     m_cloudSavingElapsed.start();
     emit cloudChanged();
 }
@@ -173,6 +176,62 @@ void Backend::endCloudSaving() {
         m_cloudSaving = false;
         afterCloudSavingEnds();
     });
+}
+
+bool Backend::waitForCloudEvent(int timeoutMs) {
+    QEventLoop loop;
+    QTimer timer;
+    bool signalled = false;
+    timer.setSingleShot(true);
+    const auto finished = connect(this, &Backend::cloudTaskFinished, &loop, [&] {
+        signalled = true;
+        loop.quit();
+    });
+    const auto changed = connect(this, &Backend::cloudChanged, &loop, [&] {
+        signalled = true;
+        loop.quit();
+    });
+    connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
+    timer.start(qMax(1, timeoutMs));
+    loop.exec();
+    disconnect(finished);
+    disconnect(changed);
+    return signalled;
+}
+
+// Hide and quit are the only automatic sync points. Local notes are flushed
+// first, then one bounded cloud request runs while the window is still up, so
+// shutdown cannot hang on a slow network and typing never races an upload.
+bool Backend::syncBeforeHide() {
+    if (!flush()) return false;
+    if (!m_cloudSignedIn) return true;
+
+    QElapsedTimer total;
+    total.start();
+    // The local command socket waits 5s for a reply, so keep the blocking
+    // cloud attempt below that; anything slower is retried on the next hide.
+    const int budget = 4000;
+    const auto remaining = [&] { return qMax(0, budget - int(total.elapsed())); };
+
+    // Finish a startup or manual task so its result is not discarded.
+    while ((m_cloudTaskActive || m_cloudSaving) && remaining() > 0) {
+        if (!waitForCloudEvent(remaining())) break;
+    }
+    if (!m_cloudSaved && m_cloudSignedIn && !m_cloudTaskActive && !m_cloudSaving
+        && remaining() > 0) {
+        m_cloudSyncPending = false;
+        m_cloudSyncTimer.stop();
+        startCloudSync();
+        while (m_cloudTaskActive && remaining() > 0) {
+            if (!waitForCloudEvent(remaining())) break;
+        }
+    }
+    if (m_cloudSaved) return true;
+
+    if (m_cloudStatus.isEmpty())
+        m_cloudStatus = tr("Cloud backup will retry the next time you hide or quit");
+    emit cloudChanged();
+    return false;
 }
 
 void Backend::refreshCloudAccount() {
@@ -215,15 +274,6 @@ void Backend::loadCloudConfig() {
                               Q_ARG(QString, m_cloudRequestContent));
 }
 
-void Backend::scheduleCloudSync() {
-    if (!m_cloudSignedIn) return;
-    if (m_cloudSaving) {
-        m_cloudSyncPending = true;
-        return;
-    }
-    m_cloudSyncTimer.start();
-}
-
 void Backend::startCloudSync() {
     if (!m_cloudSignedIn) return;
     if (m_cloudSaving) {
@@ -239,6 +289,7 @@ void Backend::startCloudSync() {
 }
 
 void Backend::onCloudFinished(const CloudResult &result) {
+    m_cloudTaskActive = false;
     switch (result.kind) {
     case CloudResult::Initialize:
         m_cloudAccount = result.account;
@@ -282,8 +333,7 @@ void Backend::onCloudFinished(const CloudResult &result) {
             // the merged snapshot would delete that newer text, so leave the
             // editor alone and let the next sync carry it.
             m_cloudSaved = false;
-            m_cloudStatus = tr("Cloud updated while you were typing — syncing again…");
-            m_cloudSyncPending = true;
+            m_cloudStatus = tr("Cloud updated while you were typing — hide Jot to sync your latest text");
             break;
         }
         const bool applied = result.content == m_content || applyCloudContent(result.content);
@@ -310,6 +360,7 @@ void Backend::onCloudFinished(const CloudResult &result) {
     }
     }
     endCloudSaving();
+    emit cloudTaskFinished();
 }
 
 void Backend::cloudSignIn(const QString &email, const QString &password) {
@@ -333,6 +384,7 @@ void Backend::cloudSignOut() {
 }
 
 void Backend::cloudSyncNow() {
+    if (!flush()) return;
     startCloudSync();
 }
 
@@ -573,6 +625,5 @@ bool Backend::flush() {
     }
     m_saved = m_content;
     setStatus(tr("Saved on this device"));
-    scheduleCloudSync();
     return true;
 }

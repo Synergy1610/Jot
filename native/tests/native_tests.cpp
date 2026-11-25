@@ -783,7 +783,7 @@ void NativeTests::cloudTypingDuringSyncIsNotLost() {
     QVERIFY(jot_cloud_sign_in(email.constData(), password.constData(), &error));
 
     const QString base = QStringLiteral("sync-race-base");
-    const QString typed = base + QStringLiteral("\n\ntyped during sync");
+    const QString typed = base + QStringLiteral(" typed during sync");
     char *content = nullptr;
     char *updated = nullptr;
     qlonglong version = 0;
@@ -818,15 +818,35 @@ void NativeTests::cloudTypingDuringSyncIsNotLost() {
     config.close();
 
     Backend backend(path);
+    QQmlApplicationEngine engine;
+    engine.rootContext()->setContextProperty("backend", &backend);
+    engine.load(QUrl(QStringLiteral("qrc:/Main.qml")));
+    QVERIFY(!engine.rootObjects().isEmpty());
+    auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
+    QVERIFY(window);
+    auto *editor = window->findChild<QQuickItem *>("padEditor");
+    QVERIFY(editor);
+    editor->forceActiveFocus();
+    QTRY_VERIFY(editor->hasActiveFocus());
+
     QTRY_VERIFY_WITH_TIMEOUT(backend.cloudSignedIn(), 10000);
     QTRY_VERIFY_WITH_TIMEOUT(!backend.cloudSaving(), 15000);
     QTRY_VERIFY_WITH_TIMEOUT(backend.cloudSaved(), 15000);
 
+    QTest::keyClick(window, Qt::Key_End, Qt::ControlModifier);
     backend.cloudSyncNow();
-    backend.edit(typed);
+    QVERIFY(backend.cloudSaving());
+    for (const QChar ch : QStringLiteral(" typed during sync")) {
+        const Qt::Key letter = ch == QLatin1Char(' ') ? Qt::Key_Space
+            : static_cast<Qt::Key>(ch.toUpper().unicode());
+        QTest::keyClick(window, letter);
+    }
+    QTRY_COMPARE(backend.content(), typed);
     QTRY_VERIFY_WITH_TIMEOUT(!backend.cloudSaving(), 15000);
     QCOMPARE(backend.content(), typed);
-    QTRY_VERIFY_WITH_TIMEOUT(backend.cloudSaved(), 20000);
+    QVERIFY(backend.syncBeforeHide());
+    QCOMPARE(backend.content(), typed);
+    QVERIFY(backend.cloudSaved());
     QCOMPARE(backend.content(), typed);
 
     content = nullptr;

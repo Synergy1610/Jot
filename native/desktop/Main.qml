@@ -64,10 +64,13 @@ ApplicationWindow {
         onTriggered: window.headerDate = backend.displayDate()
     }
     onClosing: function(close) {
-        if (backend.ready && !backend.flush())
+        if (backend.ready && !backend.flush()) {
             close.accepted = false
-        else
-            Qt.callLater(Qt.quit)
+            return
+        }
+        if (backend.ready)
+            backend.syncBeforeHide()
+        Qt.callLater(Qt.quit)
     }
 
     function handleCommand(command) {
@@ -93,6 +96,8 @@ ApplicationWindow {
                     handleCommand("show")
                 return "error " + backend.status
             }
+            if (backend.ready)
+                backend.syncBeforeHide()
             if (command === "hide") {
                 hide()
                 return "ok hidden"
