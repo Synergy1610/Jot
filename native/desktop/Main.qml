@@ -159,7 +159,7 @@ ApplicationWindow {
 
                 Label {
                     Layout.fillWidth: true
-                    Layout.preferredWidth: 21
+                    Layout.preferredWidth: 82
                     color: "#b59790"
                     font.family: "monospace"
                     font.pixelSize: 12
