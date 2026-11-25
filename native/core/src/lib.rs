@@ -562,6 +562,31 @@ pub unsafe extern "C" fn jot_cloud_restore(error: *mut *mut c_char) -> bool {
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn jot_cloud_set_baseline(
+    local_content: *const c_char, remote_content: *const c_char, version: i64,
+    error: *mut *mut c_char,
+) -> bool {
+    if !error.is_null() { *error = ptr::null_mut(); }
+    let result = (|| {
+        let local = input(local_content)?.to_string();
+        let remote = if remote_content.is_null() {
+            None
+        } else {
+            Some(cloud::CloudPad {
+                content: input(remote_content)?.to_string(),
+                updated_at: String::new(),
+                version,
+            })
+        };
+        with_cloud(|cloud| cloud.set_baseline_from_local(&local, remote.as_ref()))
+    })();
+    match result {
+        Ok(()) => true,
+        Err(message) => { set_error(error, &message); false }
+    }
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn jot_cloud_is_signed_in() -> bool {
     with_cloud(|cloud| Ok(cloud.is_signed_in())).unwrap_or(false)
 }
@@ -637,6 +662,28 @@ pub unsafe extern "C" fn jot_cloud_download(
             true
         }
         Ok(None) => true,
+        Err(message) => { set_error(error, &message); false }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn jot_cloud_sync(
+    local_content: *const c_char, merged: *mut *mut c_char, version: *mut i64,
+    error: *mut *mut c_char,
+) -> bool {
+    if !error.is_null() { *error = ptr::null_mut(); }
+    if !merged.is_null() { *merged = ptr::null_mut(); }
+    if !version.is_null() { *version = 0; }
+    let result = (|| {
+        let content = input(local_content)?.to_string();
+        with_cloud(|cloud| cloud.sync(&content))
+    })();
+    match result {
+        Ok(pad) => {
+            if !merged.is_null() { *merged = into_c_string(&pad.content); }
+            if !version.is_null() { *version = pad.version; }
+            true
+        }
         Err(message) => { set_error(error, &message); false }
     }
 }

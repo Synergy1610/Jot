@@ -157,9 +157,17 @@ automatic backups are debounced by 1.5s and coalesced, so typing never blocks
 on Supabase. The cloud spinner stays visible for at least 600ms so a fast
 request is still noticeable.
 
+Sync uses an append-only three-way merge. Each device keeps a 0600 base file
+with the last synced content/version. On sync: no base means all local text is
+local-only and is appended below the cloud pad; local or cloud unchanged from
+the base means the other side is pulled or pushed; an append-only local change
+is appended to the cloud pad; both sides edited differently is a conflict and
+nothing is overwritten. After a merge the combined pad is applied locally so
+the user can review it.
+
 Live verification on a disposable test user: sign-in, download, conflict-safe
-upload, round-trip and sign-out all passed, and the keyring entry is removed
-on sign-out.
+upload, append-only merge, round-trip and sign-out all passed, and the keyring
+entry is removed on sign-out.
 
 ## Remaining work
 

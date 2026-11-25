@@ -153,17 +153,25 @@ void Backend::beginCloudSaving() {
     emit cloudChanged();
 }
 
+void Backend::afterCloudSavingEnds() {
+    emit cloudChanged();
+    if (m_cloudSyncPending) {
+        m_cloudSyncPending = false;
+        if (m_cloudSignedIn && !m_cloudSaving) m_cloudSyncTimer.start();
+    }
+}
+
 void Backend::endCloudSaving() {
     const qint64 elapsed = m_cloudSavingElapsed.elapsed();
     const qint64 minimum = 600;
     if (elapsed >= minimum) {
         m_cloudSaving = false;
-        emit cloudChanged();
+        afterCloudSavingEnds();
         return;
     }
     QTimer::singleShot(static_cast<int>(minimum - elapsed), this, [this] {
         m_cloudSaving = false;
-        emit cloudChanged();
+        afterCloudSavingEnds();
     });
 }
 
@@ -202,7 +210,8 @@ void Backend::loadCloudConfig() {
     }
     beginCloudSaving();
     QMetaObject::invokeMethod(m_cloudWorker, "initialize", Qt::QueuedConnection,
-                              Q_ARG(QString, url), Q_ARG(QString, key));
+                              Q_ARG(QString, url), Q_ARG(QString, key),
+                              Q_ARG(QString, m_content));
 }
 
 void Backend::scheduleCloudSync() {
@@ -253,11 +262,37 @@ void Backend::onCloudFinished(const CloudResult &result) {
         m_cloudSaved = false;
         m_cloudStatus = result.message;
         break;
-    case CloudResult::Sync:
+    case CloudResult::Sync: {
+        bool applied = false;
+        if (result.ok && !result.content.isEmpty() && result.content != m_content) {
+            QTextDocument probe;
+            probe.setPlainText(result.content);
+            QString represented;
+            for (QTextBlock block = probe.begin(); block.isValid(); block = block.next()) {
+                if (block != probe.begin()) represented += QLatin1Char('\n');
+                represented += block.text();
+            }
+            if (represented == result.content) {
+                char *error = nullptr;
+                const QByteArray bytes = result.content.toUtf8();
+                if (jot_core_save(m_pad, m_saved.toUtf8().constData(), bytes.constData(), &error)) {
+                    m_timer.stop();
+                    m_saved = m_content = result.content;
+                    if (m_document) replaceDocument(result.content);
+                    emit contentChanged();
+                    applied = true;
+                } else {
+                    m_cloudStatus = takeError(error);
+                }
+            } else {
+                m_cloudStatus = tr("The merged notes cannot be represented by this editor");
+            }
+        }
         if (result.ok) m_cloudVersion = result.version;
-        m_cloudSaved = result.ok;
-        m_cloudStatus = result.message;
+        m_cloudSaved = result.ok && (applied || result.content.isEmpty() || result.content == m_content);
+        if (m_cloudStatus.isEmpty() || result.ok) m_cloudStatus = result.message;
         break;
+    }
     case CloudResult::Pull: {
         bool applied = false;
         if (result.ok && !result.content.isEmpty()) {
@@ -291,10 +326,6 @@ void Backend::onCloudFinished(const CloudResult &result) {
     }
     }
     emit cloudChanged();
-    if (m_cloudSyncPending && result.kind == CloudResult::Sync) {
-        m_cloudSyncPending = false;
-        if (m_cloudSignedIn) m_cloudSyncTimer.start();
-    }
 }
 
 void Backend::cloudSignIn(const QString &email, const QString &password) {

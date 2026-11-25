@@ -63,7 +63,11 @@ public:
     QString cloudTooltip() const {
         if (m_cloudSaving) return tr("Backing up to the cloud…");
         if (!m_cloudSignedIn) return tr("Cloud backup is off — sign in to enable");
-        return m_cloudSaved ? tr("Backed up to the cloud") : tr("Cloud backup is on");
+        if (m_cloudStatus.contains(tr("differ"), Qt::CaseInsensitive)
+            || m_cloudStatus.contains(tr("failed"), Qt::CaseInsensitive)
+            || m_cloudStatus.contains(tr("Could not"), Qt::CaseInsensitive))
+            return tr("Cloud backup needs attention — see settings");
+        return m_cloudSaved ? tr("Backed up to the cloud") : tr("Cloud backup pending — see settings");
     }
     bool localError() const { return m_loaded && m_content != m_saved && !m_timer.isActive(); }
     QString localTooltip() const {
@@ -112,6 +116,7 @@ private:
     void finishCloud(bool ok, const QString &message);
     void beginCloudSaving();
     void endCloudSaving();
+    void afterCloudSavingEnds();
     void scheduleCloudSync();
     void startCloudSync();
     void onCloudFinished(const CloudResult &result);

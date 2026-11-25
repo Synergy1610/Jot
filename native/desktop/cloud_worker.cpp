@@ -9,7 +9,7 @@ static QString takeCloudError(char *error) {
     return message;
 }
 
-void CloudWorker::initialize(const QString &url, const QString &key) {
+void CloudWorker::initialize(const QString &url, const QString &key, const QString &localContent) {
     CloudResult result;
     result.kind = CloudResult::Initialize;
     char *error = nullptr;
@@ -42,6 +42,10 @@ void CloudWorker::initialize(const QString &url, const QString &key) {
         result.ok = true;
         result.version = version;
         result.message = QStringLiteral("Backed up to the cloud");
+        const QByteArray localBytes = localContent.toUtf8();
+        const char *remoteBytes = content ? content : nullptr;
+        if (!jot_cloud_set_baseline(localBytes.constData(), remoteBytes, version, &error))
+            result.message = takeCloudError(error);
         if (content) jot_core_string_free(content);
         if (updated) jot_core_string_free(updated);
     } else {
@@ -110,19 +114,24 @@ void CloudWorker::signOut() {
     emitResult(result);
 }
 
-void CloudWorker::sync(const QString &content, qlonglong version) {
+void CloudWorker::sync(const QString &content, qlonglong) {
     CloudResult result;
     result.kind = CloudResult::Sync;
     char *error = nullptr;
+    char *merged = nullptr;
     qlonglong newVersion = 0;
     const QByteArray bytes = content.toUtf8();
-    if (!jot_cloud_upload(bytes.constData(), version, &newVersion, &error)) {
+    if (!jot_cloud_sync(bytes.constData(), &merged, &newVersion, &error)) {
         result.message = takeCloudError(error);
         emitResult(result);
         return;
     }
     result.ok = true;
     result.version = newVersion;
+    if (merged) {
+        result.content = QString::fromUtf8(merged);
+        jot_core_string_free(merged);
+    }
     result.message = QStringLiteral("Backed up to the cloud");
     emitResult(result);
 }

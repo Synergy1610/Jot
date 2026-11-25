@@ -42,6 +42,29 @@ fn config_dir() -> PathBuf {
 
 fn session_file() -> PathBuf { config_dir().join("cloud-session.json") }
 fn account_file() -> PathBuf { config_dir().join("cloud-account") }
+fn state_file() -> PathBuf { config_dir().join("cloud-state.json") }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct BaseState {
+    content: String,
+    version: i64,
+}
+
+fn load_base() -> Option<BaseState> {
+    std::fs::read(state_file()).ok()
+        .and_then(|bytes| serde_json::from_slice::<BaseState>(&bytes).ok())
+}
+
+fn save_base(state: &BaseState) -> Result<(), String> {
+    let json = serde_json::to_vec(state).map_err(|e| format!("Could not encode sync state: {e}"))?;
+    write_private(&state_file(), &json)
+}
+
+fn append_text(base: &str, extra: &str) -> String {
+    if extra.is_empty() { return base.to_string(); }
+    if base.is_empty() { return extra.to_string(); }
+    format!("{}\n\n{}", base.trim_end_matches('\n'), extra.trim_start_matches('\n'))
+}
 
 fn write_private(path: &Path, bytes: &[u8]) -> Result<(), String> {
     if let Some(parent) = path.parent() {
@@ -199,6 +222,7 @@ impl Cloud {
         }
         let _ = std::fs::remove_file(session_file());
         let _ = std::fs::remove_file(account_file());
+        let _ = std::fs::remove_file(state_file());
         let _ = Command::new("secret-tool")
             .args(["clear", "service", "jot"])
             .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null())
@@ -266,6 +290,54 @@ impl Cloud {
         let token = session.access_token.clone();
         self.session = Some(session);
         Ok(token)
+    }
+
+    /// The first time a device sees the cloud, record a base only when the
+    /// two pads already match. Otherwise the whole local pad is treated as
+    /// local-only content to append on the next sync.
+    pub fn set_baseline_from_local(&self, local: &str, remote: Option<&CloudPad>) -> Result<(), String> {
+        if load_base().is_some() { return Ok(()); }
+        let content = match remote {
+            Some(pad) if pad.content == local => local.to_string(),
+            _ => String::new(),
+        };
+        let version = remote.map(|pad| pad.version).unwrap_or(0);
+        save_base(&BaseState { content, version })
+    }
+
+    /// Three-way sync. Only automatic merge is appending local-only text at
+    /// the bottom of the cloud pad; conflicting edits are reported, never
+    /// overwritten. Returns the pad that should become the local content.
+    pub fn sync(&mut self, local: &str) -> Result<CloudPad, String> {
+        let remote = self.download()?;
+        let base = load_base();
+        let Some(remote) = remote else {
+            let pad = self.upload(local, 0)?;
+            save_base(&BaseState { content: local.to_string(), version: pad.version })?;
+            return Ok(pad);
+        };
+        let Some(base) = base else {
+            let merged = append_text(&remote.content, local);
+            let pad = self.upload(&merged, remote.version)?;
+            save_base(&BaseState { content: merged, version: pad.version })?;
+            return Ok(pad);
+        };
+        if local == base.content {
+            save_base(&BaseState { content: remote.content.clone(), version: remote.version })?;
+            return Ok(remote);
+        }
+        if remote.content == base.content {
+            let pad = self.upload(local, base.version)?;
+            save_base(&BaseState { content: local.to_string(), version: pad.version })?;
+            return Ok(pad);
+        }
+        if let Some(delta) = local.strip_prefix(&base.content) {
+            let merged = append_text(&remote.content, delta);
+            let pad = self.upload(&merged, remote.version)?;
+            save_base(&BaseState { content: merged, version: pad.version })?;
+            return Ok(pad);
+        }
+        Err("Local and cloud notes have both changed; nothing was overwritten. Download or back up manually after reviewing.".into())
     }
 
     pub fn download(&mut self) -> Result<Option<CloudPad>, String> {
@@ -343,5 +415,18 @@ impl Cloud {
             updated_at: row.get("updated_at").and_then(Value::as_str).unwrap_or(&updated_at).to_string(),
             version: row.get("version").and_then(Value::as_i64).unwrap_or(1),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn append_preserves_both_sides() {
+        assert_eq!(append_text("cloud notes", "phone notes"), "cloud notes\n\nphone notes");
+        assert_eq!(append_text("", "local only"), "local only");
+        assert_eq!(append_text("cloud", ""), "cloud");
+        assert_eq!(append_text("cloud\n\n", "\nphone"), "cloud\n\nphone");
     }
 }
