@@ -662,15 +662,19 @@ void NativeTests::savingBadgeStates() {
             && localTickItem && iconsItem);
     QCOMPARE(gear->width(), 17);
     QCOMPARE(gear->height(), 17);
-    QCOMPARE(localBadge->width(), 33);
+    QCOMPARE(localBadge->width(), 37);
     QCOMPARE(cloudBadgeItem->width(), 21);
     QCOMPARE(cloudBadgeItem->x(), 0);
     QCOMPARE(localBadge->x(), cloudBadgeItem->x() + cloudBadgeItem->width());
     const qreal cloudIconRight = cloudIconItem->mapToItem(iconsItem, QPointF(0, 0)).x()
         + cloudIconItem->width();
     const qreal monitorLeft = monitor->mapToItem(iconsItem, QPointF(0, 0)).x();
-    QCOMPARE(monitorLeft - cloudIconRight, 3);
-    QCOMPARE(localTickItem->x(), monitor->x() + monitor->width() + 3);
+    QCOMPARE(monitorLeft - cloudIconRight, 5);
+    QCOMPARE(localTickItem->x(), monitor->x() + monitor->width() + 5);
+    const QPointF groupCenter = iconsItem->mapToItem(
+        window->contentItem(), QPointF(iconsItem->width() / 2, iconsItem->height() / 2));
+    QVERIFY(groupCenter.x() > window->width() / 2);
+    QVERIFY(groupCenter.x() < window->width() / 2 + 48);
     QVERIFY(!window->findChild<QObject *>("cloudSpinner"));
     QVERIFY(!window->findChild<QObject *>("cloudTick"));
 

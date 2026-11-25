@@ -159,6 +159,7 @@ ApplicationWindow {
 
                 Label {
                     Layout.fillWidth: true
+                    Layout.preferredWidth: 17
                     color: "#b59790"
                     font.family: "monospace"
                     font.pixelSize: 12
@@ -168,7 +169,7 @@ ApplicationWindow {
                 Item {
                     id: statusIcons
                     objectName: "statusIcons"
-                    Layout.preferredWidth: 54
+                    Layout.preferredWidth: 58
                     Layout.preferredHeight: 30
                     Layout.alignment: Qt.AlignVCenter
 
@@ -214,7 +215,7 @@ ApplicationWindow {
                         objectName: "localBadge"
                         anchors.left: cloudBadge.right
                         anchors.verticalCenter: parent.verticalCenter
-                        width: 33
+                        width: 37
                         height: 30
                         padding: 0
                         hoverEnabled: true
@@ -231,7 +232,7 @@ ApplicationWindow {
                                 width: 15
                                 height: 15
                                 anchors.left: parent.left
-                                anchors.leftMargin: 3
+                                anchors.leftMargin: 5
                                 anchors.verticalCenter: parent.verticalCenter
                                 onPaint: {
                                     const ctx = getContext("2d")
@@ -258,14 +259,14 @@ ApplicationWindow {
                                 sourceComponent: window.spinnerComponent
                                 visible: backend.saving
                                 anchors.left: monitorIcon.right
-                                anchors.leftMargin: 3
+                                anchors.leftMargin: 5
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                             Label {
                                 id: localTick
                                 objectName: "localTick"
                                 anchors.left: monitorIcon.right
-                                anchors.leftMargin: 3
+                                anchors.leftMargin: 5
                                 anchors.verticalCenter: parent.verticalCenter
                                 visible: backend.locallySaved
                                 text: "✓"
@@ -356,6 +357,11 @@ ApplicationWindow {
                             font.pixelSize: 13
                         }
                     }
+                }
+
+                Item {
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 10
                 }
 
                 ToolButton {

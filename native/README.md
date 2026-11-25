@@ -26,9 +26,10 @@ the Account, Hotkey (Linux / Hyprland), Clear pad and About sections and the
 1.5s Copy feedback.
 
 The header has a 1px divider, 16px side padding, a smaller gear icon, and
-status badges with room to spare: the cloud badge (48px) comes first, then the
-device badge (36px), with a 4px gap. The device badge's spinner and tick sit
-3px to the right of its icon; the cloud badge is a static icon. The gear is a
+status badges with room to spare: the cloud badge (21px) comes first, then the
+device badge (37px), with the group centred slightly right of the header. The
+gap between the cloud and device icons and the gap between the device icon and
+its spinner/tick are both 5px; the cloud badge itself is a static icon. The gear is a
 circular 17px icon in the same `#b59790` accent as the date, at full opacity;
 it sits inside an Item wrapper so the Button cannot stretch it. Hovering either
 badge shows a delayed, fully opaque black tooltip in the same monospace 13px
