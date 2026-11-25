@@ -132,8 +132,25 @@ against a disposable fake `HOME`, then used for the real switch. Rollback is
 to copy the preserved Tauri binary back over `~/.local/bin/jot` and restore
 the saved database backup.
 
+## v2 cloud sync
+
+Cloud sync is implemented on the `v2/cloud` branch. The Supabase migration in
+`supabase/migrations/20261125000000_create_pads.sql` creates a per-user `pads`
+table with RLS. Configure `~/.config/jot/supabase.env` (0600) with the project
+URL and publishable/anon key; never use the service-role key in the client.
+
+The core signs in with email/password, stores the session in the OS keyring
+via `secret-tool` with a 0600 file fallback, refreshes tokens automatically,
+and uploads/downloads the pad with version-based conflict detection. Local
+saves continue to work while signed out and are backed up automatically when
+signed in. The settings Account section exposes sign in/up/out, back up now
+and download; the cloud badge spinner and tick use the real cloud state.
+
+Live verification on a disposable test user: sign-in, download, conflict-safe
+upload, round-trip and sign-out all passed, and the keyring entry is removed
+on sign-out.
+
 ## Remaining work
 
-- Cloud setup needs credentials; signed-out local operation is complete.
 - Windows and Android builds are planned around the shared core but not built.
-- All native work is still untracked in git and has not been committed.
+- macOS keychain integration is not implemented; Linux uses libsecret.

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <functional>
 #include <QPointer>
 #include <QString>
 #include <QTimer>
@@ -24,8 +25,12 @@ class Backend : public QObject {
     Q_PROPERTY(bool locallySaved READ locallySaved NOTIFY statusChanged)
     Q_PROPERTY(bool incompatibleText READ incompatibleText NOTIFY statusChanged)
     Q_PROPERTY(bool saving READ saving NOTIFY statusChanged)
-    Q_PROPERTY(bool cloudSaving READ cloudSaving NOTIFY statusChanged)
-    Q_PROPERTY(bool cloudSaved READ cloudSaved NOTIFY statusChanged)
+    Q_PROPERTY(bool cloudSaving READ cloudSaving NOTIFY cloudChanged)
+    Q_PROPERTY(bool cloudSaved READ cloudSaved NOTIFY cloudChanged)
+    Q_PROPERTY(bool cloudSignedIn READ cloudSignedIn NOTIFY cloudChanged)
+    Q_PROPERTY(QString cloudAccount READ cloudAccount NOTIFY cloudChanged)
+    Q_PROPERTY(QString cloudStatus READ cloudStatus NOTIFY cloudChanged)
+    Q_PROPERTY(QString cloudTooltip READ cloudTooltip NOTIFY cloudChanged)
     Q_PROPERTY(bool localError READ localError NOTIFY statusChanged)
     Q_PROPERTY(QString localTooltip READ localTooltip NOTIFY statusChanged)
     Q_PROPERTY(QString appTitle READ appTitle CONSTANT)
@@ -45,9 +50,16 @@ public:
     bool locallySaved() const { return ready() && m_content == m_saved && m_status == tr("Saved on this device"); }
     bool incompatibleText() const { return m_pad && !m_loaded; }
     bool saving() const { return m_timer.isActive(); }
-    // Reserved for the future cloud sync; hidden until cloud backup is enabled.
-    bool cloudSaving() const { return false; }
-    bool cloudSaved() const { return false; }
+    bool cloudSaving() const { return m_cloudSaving; }
+    bool cloudSaved() const { return m_cloudSaved; }
+    bool cloudSignedIn() const { return m_cloudSignedIn; }
+    QString cloudAccount() const { return m_cloudAccount; }
+    QString cloudStatus() const { return m_cloudStatus; }
+    QString cloudTooltip() const {
+        if (m_cloudSaving) return tr("Backing up to the cloud…");
+        if (!m_cloudSignedIn) return tr("Cloud backup is off — sign in to enable");
+        return m_cloudSaved ? tr("Backed up to the cloud") : tr("Cloud backup is on");
+    }
     bool localError() const { return m_loaded && m_content != m_saved && !m_timer.isActive(); }
     QString localTooltip() const {
         if (!m_pad || !m_loaded) return tr("Local save unavailable");
@@ -70,6 +82,11 @@ public:
     Q_INVOKABLE bool clearPad();
     Q_INVOKABLE bool undoClear();
     Q_INVOKABLE bool copyOriginal();
+    Q_INVOKABLE void cloudSignIn(const QString &email, const QString &password);
+    Q_INVOKABLE void cloudSignUp(const QString &email, const QString &password);
+    Q_INVOKABLE void cloudSignOut();
+    Q_INVOKABLE void cloudSyncNow();
+    Q_INVOKABLE void cloudPull();
     bool backupTo(const QString &path);
     bool migrateLegacy();
 
@@ -78,12 +95,17 @@ signals:
     void statusChanged();
     void undoChanged();
     void trayAvailableChanged();
+    void cloudChanged();
 
 private:
     void setStatus(const QString &status);
     QString documentText() const;
     void refreshUndo();
     void replaceDocument(const QString &text);
+    void loadCloudConfig();
+    void refreshCloudAccount();
+    void finishCloud(bool ok, const QString &message);
+    void runCloudTask(const std::function<void()> &task);
     static QString takeError(char *error);
     JotCorePad *m_pad = nullptr;
     QString m_content;
@@ -95,6 +117,12 @@ private:
     QString m_databasePath;
     bool m_startHidden = false;
     bool m_trayAvailable = false;
+    bool m_cloudSaving = false;
+    bool m_cloudSaved = false;
+    bool m_cloudSignedIn = false;
+    qlonglong m_cloudVersion = 0;
+    QString m_cloudAccount;
+    QString m_cloudStatus;
     QPointer<QTextDocument> m_document;
     Hotkey m_hotkey;
 };

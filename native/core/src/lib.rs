@@ -11,6 +11,22 @@ use std::path::Path;
 use std::ptr;
 use std::time::Duration;
 
+mod cloud;
+
+use cloud::Cloud;
+use std::sync::{Mutex, OnceLock};
+
+static CLOUD: OnceLock<Mutex<Cloud>> = OnceLock::new();
+
+fn cloud() -> &'static Mutex<Cloud> {
+    CLOUD.get_or_init(|| Mutex::new(Cloud::new(String::new(), String::new())))
+}
+
+fn with_cloud<T>(action: impl FnOnce(&mut Cloud) -> Result<T, String>) -> Result<T, String> {
+    let mut guard = cloud().lock().map_err(|_| "Cloud state is unavailable".to_string())?;
+    action(&mut guard)
+}
+
 const MONTHS: [&str; 12] = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun",
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
@@ -509,6 +525,139 @@ pub unsafe extern "C" fn jot_core_close(pad: *mut Pad) {
 pub unsafe extern "C" fn jot_core_string_free(value: *mut c_char) {
     if !value.is_null() {
         drop(CString::from_raw(value));
+    }
+}
+
+/// --- v2 cloud API -------------------------------------------------------
+/// All strings are UTF-8 and owned by the caller; free them with
+/// `jot_core_string_free`. Maintenance UI must keep local-first behavior:
+/// every failure is reported, never applied to the local pad.
+
+#[no_mangle]
+pub unsafe extern "C" fn jot_cloud_configure(
+    url: *const c_char, anon_key: *const c_char, error: *mut *mut c_char,
+) -> bool {
+    if !error.is_null() { *error = ptr::null_mut(); }
+    let result = (|| {
+        let url = input(url)?.to_string();
+        let anon_key = input(anon_key)?.to_string();
+        if url.is_empty() || anon_key.is_empty() {
+            return Err("Supabase URL and publishable key are required".into());
+        }
+        with_cloud(|cloud| { cloud.configure(url, anon_key); Ok(()) })
+    })();
+    match result {
+        Ok(()) => true,
+        Err(message) => { set_error(error, &message); false }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn jot_cloud_restore(error: *mut *mut c_char) -> bool {
+    if !error.is_null() { *error = ptr::null_mut(); }
+    match with_cloud(|cloud| cloud.restore()) {
+        Ok(_) => true,
+        Err(message) => { set_error(error, &message); false }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn jot_cloud_is_signed_in() -> bool {
+    with_cloud(|cloud| Ok(cloud.is_signed_in())).unwrap_or(false)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn jot_cloud_account() -> *mut c_char {
+    match with_cloud(|cloud| Ok(cloud.account().map(str::to_string))) {
+        Ok(Some(email)) => into_c_string(&email),
+        _ => ptr::null_mut(),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn jot_cloud_sign_in(
+    email: *const c_char, password: *const c_char, error: *mut *mut c_char,
+) -> bool {
+    if !error.is_null() { *error = ptr::null_mut(); }
+    let result = (|| {
+        let email = input(email)?.to_string();
+        let password = input(password)?.to_string();
+        with_cloud(|cloud| cloud.sign_in(&email, &password))
+    })();
+    match result {
+        Ok(()) => true,
+        Err(message) => { set_error(error, &message); false }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn jot_cloud_sign_up(
+    email: *const c_char, password: *const c_char,
+    needs_confirmation: *mut bool, error: *mut *mut c_char,
+) -> bool {
+    if !error.is_null() { *error = ptr::null_mut(); }
+    if !needs_confirmation.is_null() { *needs_confirmation = false; }
+    let result = (|| {
+        let email = input(email)?.to_string();
+        let password = input(password)?.to_string();
+        with_cloud(|cloud| cloud.sign_up(&email, &password))
+    })();
+    match result {
+        Ok(confirmed) => {
+            if !needs_confirmation.is_null() { *needs_confirmation = !confirmed; }
+            true
+        }
+        Err(message) => { set_error(error, &message); false }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn jot_cloud_sign_out(error: *mut *mut c_char) -> bool {
+    if !error.is_null() { *error = ptr::null_mut(); }
+    match with_cloud(|cloud| cloud.sign_out()) {
+        Ok(()) => true,
+        Err(message) => { set_error(error, &message); false }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn jot_cloud_download(
+    content: *mut *mut c_char, updated_at: *mut *mut c_char, version: *mut i64,
+    error: *mut *mut c_char,
+) -> bool {
+    if !error.is_null() { *error = ptr::null_mut(); }
+    if !content.is_null() { *content = ptr::null_mut(); }
+    if !updated_at.is_null() { *updated_at = ptr::null_mut(); }
+    if !version.is_null() { *version = 0; }
+    match with_cloud(|cloud| cloud.download()) {
+        Ok(Some(pad)) => {
+            if !content.is_null() { *content = into_c_string(&pad.content); }
+            if !updated_at.is_null() { *updated_at = into_c_string(&pad.updated_at); }
+            if !version.is_null() { *version = pad.version; }
+            true
+        }
+        Ok(None) => true,
+        Err(message) => { set_error(error, &message); false }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn jot_cloud_upload(
+    content: *const c_char, version: i64, new_version: *mut i64,
+    error: *mut *mut c_char,
+) -> bool {
+    if !error.is_null() { *error = ptr::null_mut(); }
+    if !new_version.is_null() { *new_version = 0; }
+    let result = (|| {
+        let content = input(content)?.to_string();
+        with_cloud(|cloud| cloud.upload(&content, version))
+    })();
+    match result {
+        Ok(pad) => {
+            if !new_version.is_null() { *new_version = pad.version; }
+            true
+        }
+        Err(message) => { set_error(error, &message); false }
     }
 }
 

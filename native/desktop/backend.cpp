@@ -3,6 +3,7 @@
 #include <QByteArray>
 #include <QClipboard>
 #include <QDate>
+#include <QFile>
 #include <QGuiApplication>
 #include <QLocale>
 #include <QQuickTextDocument>
@@ -62,6 +63,7 @@ Backend::Backend(const QString &databasePath, QObject *parent)
     connect(&m_timer, &QTimer::timeout, this, &Backend::flush);
     setStatus(tr("Saved on this device"));
     refreshUndo();
+    QTimer::singleShot(0, this, &Backend::loadCloudConfig);
 }
 
 QString Backend::displayDate() const {
@@ -124,10 +126,205 @@ bool Backend::migrateLegacy() {
     return true;
 }
 
+void Backend::runCloudTask(const std::function<void()> &task) {
+    if (m_cloudSaving) return;
+    m_cloudSaving = true;
+    m_cloudSaved = false;
+    emit cloudChanged();
+    // Let QML paint the spinner before a blocking network call.
+    QTimer::singleShot(0, this, [this, task] {
+        task();
+        m_cloudSaving = false;
+        emit cloudChanged();
+    });
+}
+
+void Backend::finishCloud(bool ok, const QString &message) {
+    m_cloudStatus = message;
+    m_cloudSaved = ok && m_cloudSignedIn;
+    emit cloudChanged();
+}
+
+void Backend::refreshCloudAccount() {
+    char *account = jot_cloud_account();
+    m_cloudAccount = account ? QString::fromUtf8(account) : QString();
+    if (account) jot_core_string_free(account);
+    m_cloudSignedIn = jot_cloud_is_signed_in();
+    emit cloudChanged();
+}
+
+void Backend::loadCloudConfig() {
+    const QString path = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
+        + QStringLiteral("/jot/supabase.env");
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        m_cloudStatus = tr("Cloud backup is off");
+        emit cloudChanged();
+        return;
+    }
+    QString url, key;
+    while (!file.atEnd()) {
+        const QString line = QString::fromUtf8(file.readLine()).trimmed();
+        const int split = line.indexOf(QLatin1Char('='));
+        if (split <= 0 || line.startsWith(QLatin1Char('#'))) continue;
+        const QString name = line.left(split).trimmed();
+        const QString value = line.mid(split + 1).trimmed();
+        if (name == QStringLiteral("SUPABASE_URL")) url = value;
+        if (name == QStringLiteral("SUPABASE_ANON_KEY")) key = value;
+    }
+    file.close();
+    char *error = nullptr;
+    if (url.isEmpty() || key.isEmpty()
+        || !jot_cloud_configure(url.toUtf8().constData(), key.toUtf8().constData(), &error)) {
+        m_cloudStatus = error ? takeError(error) : tr("Cloud configuration is incomplete");
+        emit cloudChanged();
+        return;
+    }
+    if (!jot_cloud_restore(&error)) {
+        m_cloudStatus = error ? takeError(error) : tr("Cloud backup is off");
+        emit cloudChanged();
+        return;
+    }
+    refreshCloudAccount();
+    if (!m_cloudSignedIn) {
+        m_cloudStatus = tr("Cloud backup is off");
+        return;
+    }
+    char *content = nullptr;
+    char *updated = nullptr;
+    qlonglong version = 0;
+    if (jot_cloud_download(&content, &updated, &version, &error)) {
+        m_cloudVersion = version;
+        m_cloudSaved = true;
+        m_cloudStatus = tr("Backed up to the cloud");
+        if (content) jot_core_string_free(content);
+        if (updated) jot_core_string_free(updated);
+    } else {
+        m_cloudStatus = takeError(error);
+    }
+    emit cloudChanged();
+}
+
+void Backend::cloudSignIn(const QString &email, const QString &password) {
+    const QString user = email, pass = password;
+    runCloudTask([this, user, pass] {
+        char *error = nullptr;
+        const QByteArray emailBytes = user.toUtf8();
+        const QByteArray passwordBytes = pass.toUtf8();
+        if (!jot_cloud_sign_in(emailBytes.constData(), passwordBytes.constData(), &error)) {
+            finishCloud(false, takeError(error));
+            return;
+        }
+        refreshCloudAccount();
+        finishCloud(true, tr("Signed in"));
+    });
+}
+
+void Backend::cloudSignUp(const QString &email, const QString &password) {
+    const QString user = email, pass = password;
+    runCloudTask([this, user, pass] {
+        char *error = nullptr;
+        bool needsConfirmation = false;
+        const QByteArray emailBytes = user.toUtf8();
+        const QByteArray passwordBytes = pass.toUtf8();
+        if (!jot_cloud_sign_up(emailBytes.constData(), passwordBytes.constData(),
+                               &needsConfirmation, &error)) {
+            finishCloud(false, takeError(error));
+            return;
+        }
+        refreshCloudAccount();
+        finishCloud(true, needsConfirmation
+            ? tr("Check your email to confirm, then sign in")
+            : tr("Signed in"));
+    });
+}
+
+void Backend::cloudSignOut() {
+    runCloudTask([this] {
+        char *error = nullptr;
+        if (!jot_cloud_sign_out(&error)) {
+            finishCloud(false, takeError(error));
+            return;
+        }
+        m_cloudVersion = 0;
+        refreshCloudAccount();
+        finishCloud(true, tr("Signed out"));
+    });
+}
+
+void Backend::cloudSyncNow() {
+    if (!m_cloudSignedIn) {
+        finishCloud(false, tr("Sign in before backing up to the cloud"));
+        return;
+    }
+    const QString content = m_content;
+    runCloudTask([this, content] {
+        char *error = nullptr;
+        qlonglong version = 0;
+        const QByteArray bytes = content.toUtf8();
+        if (!jot_cloud_upload(bytes.constData(), m_cloudVersion, &version, &error)) {
+            finishCloud(false, takeError(error));
+            return;
+        }
+        m_cloudVersion = version;
+        finishCloud(true, tr("Backed up to the cloud"));
+    });
+}
+
+void Backend::cloudPull() {
+    if (!m_cloudSignedIn) {
+        finishCloud(false, tr("Sign in before downloading cloud notes"));
+        return;
+    }
+    runCloudTask([this] {
+        char *error = nullptr;
+        char *content = nullptr;
+        char *updated = nullptr;
+        qlonglong version = 0;
+        if (!jot_cloud_download(&content, &updated, &version, &error)) {
+            finishCloud(false, takeError(error));
+            return;
+        }
+        if (!content) {
+            finishCloud(true, tr("No cloud notes yet"));
+            return;
+        }
+        const QString text = QString::fromUtf8(content);
+        jot_core_string_free(content);
+        if (updated) jot_core_string_free(updated);
+        QTextDocument probe;
+        probe.setPlainText(text);
+        QString represented;
+        for (QTextBlock block = probe.begin(); block.isValid(); block = block.next()) {
+            if (block != probe.begin()) represented += QLatin1Char('\n');
+            represented += block.text();
+        }
+        if (represented != text) {
+            finishCloud(false, tr("The cloud notes cannot be represented by this editor"));
+            return;
+        }
+        const QByteArray bytes = text.toUtf8();
+        if (!jot_core_save(m_pad, m_saved.toUtf8().constData(), bytes.constData(), &error)) {
+            finishCloud(false, takeError(error));
+            return;
+        }
+        m_timer.stop();
+        m_saved = m_content = text;
+        if (m_document) replaceDocument(text);
+        emit contentChanged();
+        m_cloudVersion = version;
+        finishCloud(true, tr("Downloaded from the cloud"));
+    });
+}
+
 void Backend::edit(const QString &text) {
     if (!ready() || text == m_content) return;
     m_content = text;
     emit undoChanged();
+    if (m_cloudSaved) {
+        m_cloudSaved = false;
+        emit cloudChanged();
+    }
     if (m_content == m_saved) {
         m_timer.stop();
         setStatus(tr("Saved on this device"));
@@ -306,5 +503,6 @@ bool Backend::flush() {
     }
     m_saved = m_content;
     setStatus(tr("Saved on this device"));
+    if (m_cloudSignedIn) QTimer::singleShot(0, this, &Backend::cloudSyncNow);
     return true;
 }

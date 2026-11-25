@@ -254,11 +254,11 @@ ApplicationWindow {
                         height: 30
                         padding: 0
                         hoverEnabled: true
-                        Accessible.name: qsTr("Cloud backup is off — sign in to enable")
+                        Accessible.name: backend.cloudTooltip
                         background: null
-                        onHoveredChanged: hovered ? statusIcons.showTip(cloudBadge, qsTr("Cloud backup is off — sign in to enable"))
+                        onHoveredChanged: hovered ? statusIcons.showTip(cloudBadge, backend.cloudTooltip)
                                                   : statusIcons.hideTip()
-                        onActiveFocusChanged: activeFocus ? statusIcons.showTip(cloudBadge, qsTr("Cloud backup is off — sign in to enable"))
+                        onActiveFocusChanged: activeFocus ? statusIcons.showTip(cloudBadge, backend.cloudTooltip)
                                                           : statusIcons.hideTip()
                         contentItem: Item {
                             Canvas {
@@ -516,12 +516,172 @@ ApplicationWindow {
                     Text {
                         objectName: "settingsBody"
                         Layout.fillWidth: true
-                        text: qsTr("Signed out — cloud backup is off. Email/password sign-in arrives in v2. Your notes stay on this machine.")
+                        text: backend.cloudSignedIn
+                            ? qsTr("Signed in as %1. Notes stay on this device and are backed up to the cloud.")
+                                .arg(backend.cloudAccount)
+                            : qsTr("Signed out — notes stay on this machine until you sign in.")
                         color: "#FAFCFB"
                         font.family: "monospace"
                         font.pixelSize: 13
                         wrapMode: Text.WordWrap
                         lineHeight: 1.5
+                    }
+                    TextField {
+                        id: cloudEmail
+                        objectName: "cloudEmail"
+                        Layout.fillWidth: true
+                        placeholderText: qsTr("Email")
+                        placeholderTextColor: "#584e51"
+                        color: "#FAFCFB"
+                        font.family: "monospace"
+                        font.pixelSize: 13
+                        leftPadding: 8
+                        rightPadding: 8
+                        implicitHeight: 30
+                        background: Rectangle {
+                            color: "#000000"
+                            radius: 6
+                            border.width: 1
+                            border.color: "#584e51"
+                        }
+                    }
+                    TextField {
+                        id: cloudPassword
+                        objectName: "cloudPassword"
+                        Layout.fillWidth: true
+                        placeholderText: qsTr("Password")
+                        placeholderTextColor: "#584e51"
+                        echoMode: TextInput.Password
+                        color: "#FAFCFB"
+                        font.family: "monospace"
+                        font.pixelSize: 13
+                        leftPadding: 8
+                        rightPadding: 8
+                        implicitHeight: 30
+                        background: Rectangle {
+                            color: "#000000"
+                            radius: 6
+                            border.width: 1
+                            border.color: "#584e51"
+                        }
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        Button {
+                            id: signInButton
+                            objectName: "cloudSignIn"
+                            implicitHeight: 34
+                            Layout.alignment: Qt.AlignVCenter
+                            leftPadding: 8; rightPadding: 8; topPadding: 4; bottomPadding: 4
+                            enabled: !backend.cloudSaving && cloudEmail.text.length > 0 && cloudPassword.text.length > 0
+                            background: Rectangle {
+                                radius: 6; color: "#000000"; border.width: 1
+                                border.color: signInButton.hovered ? "#87a9b0" : "#b59790"
+                            }
+                            contentItem: Text {
+                                text: qsTr("Sign in")
+                                color: signInButton.hovered ? "#87a9b0" : "#FAFCFB"
+                                font.family: "monospace"; font.pixelSize: 13
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            onClicked: backend.cloudSignIn(cloudEmail.text, cloudPassword.text)
+                        }
+                        Button {
+                            id: signUpButton
+                            objectName: "cloudSignUp"
+                            implicitHeight: 34
+                            Layout.alignment: Qt.AlignVCenter
+                            leftPadding: 8; rightPadding: 8; topPadding: 4; bottomPadding: 4
+                            enabled: !backend.cloudSaving && cloudEmail.text.length > 0 && cloudPassword.text.length > 0
+                            background: Rectangle {
+                                radius: 6; color: "#000000"; border.width: 1
+                                border.color: signUpButton.hovered ? "#87a9b0" : "#b59790"
+                            }
+                            contentItem: Text {
+                                text: qsTr("Sign up")
+                                color: signUpButton.hovered ? "#87a9b0" : "#FAFCFB"
+                                font.family: "monospace"; font.pixelSize: 13
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            onClicked: backend.cloudSignUp(cloudEmail.text, cloudPassword.text)
+                        }
+                        Button {
+                            id: signOutButton
+                            objectName: "cloudSignOut"
+                            implicitHeight: 34
+                            Layout.alignment: Qt.AlignVCenter
+                            leftPadding: 8; rightPadding: 8; topPadding: 4; bottomPadding: 4
+                            visible: backend.cloudSignedIn
+                            background: Rectangle {
+                                radius: 6; color: "#000000"; border.width: 1
+                                border.color: signOutButton.hovered ? "#87a9b0" : "#b59790"
+                            }
+                            contentItem: Text {
+                                text: qsTr("Sign out")
+                                color: signOutButton.hovered ? "#87a9b0" : "#FAFCFB"
+                                font.family: "monospace"; font.pixelSize: 13
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            onClicked: backend.cloudSignOut()
+                        }
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        visible: backend.cloudSignedIn
+                        Button {
+                            id: syncButton
+                            objectName: "cloudSync"
+                            implicitHeight: 34
+                            Layout.alignment: Qt.AlignVCenter
+                            leftPadding: 8; rightPadding: 8; topPadding: 4; bottomPadding: 4
+                            enabled: !backend.cloudSaving
+                            background: Rectangle {
+                                radius: 6; color: "#000000"; border.width: 1
+                                border.color: syncButton.hovered ? "#87a9b0" : "#b59790"
+                            }
+                            contentItem: Text {
+                                text: qsTr("Back up now")
+                                color: syncButton.hovered ? "#87a9b0" : "#FAFCFB"
+                                font.family: "monospace"; font.pixelSize: 13
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            onClicked: backend.cloudSyncNow()
+                        }
+                        Button {
+                            id: pullButton
+                            objectName: "cloudPull"
+                            implicitHeight: 34
+                            Layout.alignment: Qt.AlignVCenter
+                            leftPadding: 8; rightPadding: 8; topPadding: 4; bottomPadding: 4
+                            enabled: !backend.cloudSaving
+                            background: Rectangle {
+                                radius: 6; color: "#000000"; border.width: 1
+                                border.color: pullButton.hovered ? "#87a9b0" : "#b59790"
+                            }
+                            contentItem: Text {
+                                text: qsTr("Download")
+                                color: pullButton.hovered ? "#87a9b0" : "#FAFCFB"
+                                font.family: "monospace"; font.pixelSize: 13
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            onClicked: backend.cloudPull()
+                        }
+                    }
+                    Text {
+                        objectName: "cloudStatus"
+                        Layout.fillWidth: true
+                        text: backend.cloudStatus
+                        color: "#87a9b0"
+                        font.family: "monospace"
+                        font.pixelSize: 13
+                        wrapMode: Text.WordWrap
                         Layout.bottomMargin: 12
                     }
                 }
