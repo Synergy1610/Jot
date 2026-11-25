@@ -43,7 +43,7 @@ private slots:
     void hotkeyHelpUsesDisposableConfig();
     void savingBadgeStates();
     void startupRuleInstallsAndReportsFailure();
-    void cloudSpinnerAppearsDuringSync();
+    void cloudOnlySyncsOnHide();
     void cloudTypingDuringSyncIsNotLost();
     void placementTargetsOnlyPrototypeAndCancelsWhenHidden();
     void fixedWindowHintsProtectFullscreenOnMap();
@@ -602,32 +602,30 @@ void NativeTests::savingBadgeStates() {
     auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
     QVERIFY(window);
     auto *localSpinner = window->findChild<QObject *>("localSpinner");
-    auto *cloudSpinner = window->findChild<QObject *>("cloudSpinner");
     auto *tooltip = window->findChild<QObject *>("badgeTooltip");
-    QVERIFY(localSpinner && cloudSpinner && tooltip);
+    QVERIFY(localSpinner && tooltip);
     auto *localBadge = window->findChild<QQuickItem *>("localBadge");
     auto *cloudBadgeItem = window->findChild<QQuickItem *>("cloudBadge");
     auto *monitor = window->findChild<QQuickItem *>("monitorIcon");
     auto *cloudIconItem = window->findChild<QQuickItem *>("cloudIcon");
     auto *localTickItem = window->findChild<QQuickItem *>("localTick");
-    auto *cloudTickItem = window->findChild<QQuickItem *>("cloudTick");
     auto *editor = window->findChild<QQuickItem *>("padEditor");
     auto *gear = window->findChild<QQuickItem *>("gearIcon");
     QVERIFY(editor && gear && localBadge && cloudBadgeItem && monitor && cloudIconItem
-            && localTickItem && cloudTickItem);
+            && localTickItem);
     QCOMPARE(gear->width(), 17);
     QCOMPARE(gear->height(), 17);
     QCOMPARE(localBadge->width(), 36);
     QCOMPARE(cloudBadgeItem->width(), 48);
     QCOMPARE(cloudBadgeItem->x(), localBadge->x() + localBadge->width() + 4);
     QCOMPARE(localTickItem->x(), monitor->x() + monitor->width() + 3);
-    QCOMPARE(cloudTickItem->x(), cloudIconItem->x() + cloudIconItem->width() + 3);
+    QVERIFY(!window->findChild<QObject *>("cloudSpinner"));
+    QVERIFY(!window->findChild<QObject *>("cloudTick"));
 
     QVERIFY(backend.locallySaved());
     QVERIFY(!backend.saving());
     QCOMPARE(backend.localTooltip(), QString("Saved on this device"));
     QVERIFY(!localSpinner->property("visible").toBool());
-    QVERIFY(!cloudSpinner->property("visible").toBool());
 
     editor->setProperty("text", "a new note");
     QTRY_VERIFY(backend.saving());
@@ -635,7 +633,6 @@ void NativeTests::savingBadgeStates() {
     QVERIFY(!backend.locallySaved());
     QCOMPARE(backend.localTooltip(), QString("Saving on this device…"));
     QVERIFY(localSpinner->property("visible").toBool());
-    QVERIFY(!cloudSpinner->property("visible").toBool());
 
     const QByteArray screenshot = qgetenv("JOT_NATIVE_SAVING_SCREENSHOT");
     if (!screenshot.isEmpty()) {
@@ -731,7 +728,7 @@ void NativeTests::startupRuleInstallsAndReportsFailure() {
     qunsetenv("JOT_TEST_HYPR_RULE_LOG");
 }
 
-void NativeTests::cloudSpinnerAppearsDuringSync() {
+void NativeTests::cloudOnlySyncsOnHide() {
     if (qgetenv("JOT_TEST_CLOUD_LIVE") != "1")
         QSKIP("set JOT_TEST_CLOUD_LIVE=1 and Supabase env vars for the live cloud test");
     const QByteArray url = qgetenv("SUPABASE_URL");
@@ -741,32 +738,101 @@ void NativeTests::cloudSpinnerAppearsDuringSync() {
     QVERIFY(!url.isEmpty() && !key.isEmpty() && !email.isEmpty() && !password.isEmpty());
     char *error = nullptr;
     QVERIFY(jot_cloud_configure(url.constData(), key.constData(), &error));
-    if (!jot_cloud_sign_in(email.constData(), password.constData(), &error))
-        qDebug("live sign-in failed: %s", error ? error : "unknown");
-    QVERIFY(error == nullptr);
+    QVERIFY(jot_cloud_sign_in(email.constData(), password.constData(), &error));
+
+    // Start from a deterministic cloud pad and no local baseline.
+    const QString base = QStringLiteral("sync-on-hide-base");
+    const QString typed = base + QStringLiteral(" typed while local");
+    char *content = nullptr;
+    char *updated = nullptr;
+    qlonglong version = 0;
+    QVERIFY(jot_cloud_download(&content, &updated, &version, &error));
+    if (content) jot_core_string_free(content);
+    if (updated) jot_core_string_free(updated);
+    qlonglong newVersion = 0;
+    QVERIFY(jot_cloud_upload(base.toUtf8().constData(), version, &newVersion, &error));
 
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
     const QString path = dir.filePath("pad.db");
     QVERIFY(createDatabase(path));
+    {
+        QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", QStringLiteral("hide-sync"));
+        db.setDatabaseName(path);
+        QVERIFY(db.open());
+        QSqlQuery query(db);
+        QVERIFY(query.prepare("UPDATE pad SET content = ?1 WHERE id = 1"));
+        query.addBindValue(base);
+        QVERIFY(query.exec());
+        db.close();
+    }
+    QSqlDatabase::removeDatabase(QStringLiteral("hide-sync"));
+
     const QString configPath = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
         + QStringLiteral("/jot");
     QVERIFY(QDir().mkpath(configPath));
+    QFile::remove(QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
+                  + QStringLiteral("/dev.jot.app/cloud-state.json"));
     QFile config(configPath + QStringLiteral("/supabase.env"));
     QVERIFY(config.open(QIODevice::WriteOnly | QIODevice::Text));
     config.write("SUPABASE_URL=" + url + "\nSUPABASE_ANON_KEY=" + key + "\n");
     config.close();
-    Backend backend(path);
-    QTRY_VERIFY_WITH_TIMEOUT(backend.cloudSignedIn(), 10000);
 
-    bool sawSaving = false;
-    connect(&backend, &Backend::cloudChanged, &backend, [&] {
-        if (backend.cloudSaving()) sawSaving = true;
-    });
-    backend.cloudSyncNow();
-    QTRY_VERIFY_WITH_TIMEOUT(sawSaving, 10000);
+    Backend backend(path);
+    QQmlApplicationEngine engine;
+    engine.rootContext()->setContextProperty("backend", &backend);
+    engine.load(QUrl(QStringLiteral("qrc:/Main.qml")));
+    QVERIFY(!engine.rootObjects().isEmpty());
+    auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().first());
+    QVERIFY(window);
+    auto *editor = window->findChild<QQuickItem *>("padEditor");
+    QVERIFY(editor);
+    editor->forceActiveFocus();
+    QTRY_VERIFY(editor->hasActiveFocus());
+
+    QTRY_VERIFY_WITH_TIMEOUT(backend.cloudSignedIn(), 10000);
     QTRY_VERIFY_WITH_TIMEOUT(!backend.cloudSaving(), 15000);
+    QVERIFY(!backend.cloudSaved());
+
+    // Opening and typing must not touch the network.
+    bool cloudWorkWhileTyping = false;
+    connect(&backend, &Backend::cloudChanged, &backend, [&] {
+        if (backend.cloudSaving()) cloudWorkWhileTyping = true;
+    });
+    QTest::keyClick(window, Qt::Key_End, Qt::ControlModifier);
+    for (const QChar ch : QStringLiteral(" typed while local")) {
+        const Qt::Key letter = ch == QLatin1Char(' ') ? Qt::Key_Space
+            : static_cast<Qt::Key>(ch.toUpper().unicode());
+        QTest::keyClick(window, letter);
+    }
+    QTRY_COMPARE(backend.content(), typed);
+    QTest::qWait(2500);
+    QVERIFY(!cloudWorkWhileTyping);
+    QVERIFY(!backend.cloudSaving());
+    QVERIFY(!backend.cloudSaved());
+
+    content = nullptr;
+    updated = nullptr;
+    version = 0;
+    QVERIFY(jot_cloud_download(&content, &updated, &version, &error));
+    const QString beforeHide = content ? QString::fromUtf8(content) : QString();
+    if (content) jot_core_string_free(content);
+    if (updated) jot_core_string_free(updated);
+    QCOMPARE(beforeHide, base);
+
+    // Hiding is the sync point: local text is flushed and merged upward.
+    QVERIFY(backend.syncBeforeHide());
     QVERIFY(backend.cloudSaved());
+    QCOMPARE(backend.content(), typed);
+
+    content = nullptr;
+    updated = nullptr;
+    version = 0;
+    QVERIFY(jot_cloud_download(&content, &updated, &version, &error));
+    const QString remote = content ? QString::fromUtf8(content) : QString();
+    if (content) jot_core_string_free(content);
+    if (updated) jot_core_string_free(updated);
+    QCOMPARE(remote, typed);
     jot_cloud_sign_out(&error);
 }
 
@@ -812,6 +878,8 @@ void NativeTests::cloudTypingDuringSyncIsNotLost() {
     const QString configPath = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
         + QStringLiteral("/jot");
     QVERIFY(QDir().mkpath(configPath));
+    QFile::remove(QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
+                  + QStringLiteral("/dev.jot.app/cloud-state.json"));
     QFile config(configPath + QStringLiteral("/supabase.env"));
     QVERIFY(config.open(QIODevice::WriteOnly | QIODevice::Text));
     config.write("SUPABASE_URL=" + url + "\nSUPABASE_ANON_KEY=" + key + "\n");
@@ -831,6 +899,8 @@ void NativeTests::cloudTypingDuringSyncIsNotLost() {
 
     QTRY_VERIFY_WITH_TIMEOUT(backend.cloudSignedIn(), 10000);
     QTRY_VERIFY_WITH_TIMEOUT(!backend.cloudSaving(), 15000);
+    // Opening does not sync, so converge explicitly before the race test.
+    backend.cloudSyncNow();
     QTRY_VERIFY_WITH_TIMEOUT(backend.cloudSaved(), 15000);
 
     QTest::keyClick(window, Qt::Key_End, Qt::ControlModifier);

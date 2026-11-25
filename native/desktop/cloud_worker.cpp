@@ -9,7 +9,7 @@ static QString takeCloudError(char *error) {
     return message;
 }
 
-void CloudWorker::initialize(const QString &url, const QString &key, const QString &localContent) {
+void CloudWorker::initialize(const QString &url, const QString &key) {
     CloudResult result;
     result.kind = CloudResult::Initialize;
     char *error = nullptr;
@@ -35,27 +35,8 @@ void CloudWorker::initialize(const QString &url, const QString &key, const QStri
         result.account = QString::fromUtf8(account);
         jot_core_string_free(account);
     }
-    char *content = nullptr;
-    char *updated = nullptr;
-    qlonglong version = 0;
-    if (jot_cloud_download(&content, &updated, &version, &error)) {
-        result.ok = true;
-        result.version = version;
-        const QString remote = content ? QString::fromUtf8(content) : QString();
-        result.inSync = content != nullptr && remote == localContent;
-        result.message = result.inSync
-            ? QStringLiteral("Backed up to the cloud")
-            : (content ? QStringLiteral("Cloud notes differ — syncing")
-                       : QStringLiteral("Cloud backup pending — syncing"));
-        const QByteArray localBytes = localContent.toUtf8();
-        const char *remoteBytes = content ? content : nullptr;
-        if (!jot_cloud_set_baseline(localBytes.constData(), remoteBytes, version, &error))
-            result.message = takeCloudError(error);
-        if (content) jot_core_string_free(content);
-        if (updated) jot_core_string_free(updated);
-    } else {
-        result.message = takeCloudError(error);
-    }
+    result.ok = true;
+    result.message = QStringLiteral("Cloud backup is on");
     emitResult(result);
 }
 

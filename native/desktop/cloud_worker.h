@@ -10,7 +10,6 @@ struct CloudResult {
     QString message;
     QString account;
     bool signedIn = false;
-    bool inSync = false;
     qlonglong version = 0;
     QString content;
 };
@@ -20,7 +19,7 @@ Q_DECLARE_METATYPE(CloudResult)
 class CloudWorker : public QObject {
     Q_OBJECT
 public slots:
-    void initialize(const QString &url, const QString &key, const QString &localContent);
+    void initialize(const QString &url, const QString &key);
     void signIn(const QString &email, const QString &password);
     void signUp(const QString &email, const QString &password);
     void signOut();

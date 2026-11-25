@@ -146,19 +146,20 @@ saves continue to work while signed out and are backed up automatically when
 signed in. The settings Account section puts labels beside the email/password
 fields, uses a `?` button to open a full-window help page, and shows only Sign
 out while signed in (Sign in/Sign up are hidden). It also exposes back up now
-and download. The cloud badge spinner and tick use the real cloud state, the
-icon uses the accent colour while signed in, and its tick sits the same 3px
-from the icon as the device badge. The help page has a back button, and the
-device icon stays in the accent colour while saving — the spinner alone shows
-activity.
+and download. The cloud icon is grey while signed out and uses the accent
+colour while signed in; it never spins and has no tick, so typing never shows
+cloud activity. The help page has a back button, and the device icon stays in
+the accent colour while saving — the spinner alone shows local activity.
 
 Cloud work runs on a dedicated worker thread with a 10s network timeout.
-Syncing is event-driven: typing only autosaves locally, and the cloud is
-contacted when Jot opens, when it is hidden (Super+W), and when it quits. Hide
-and quit flush local notes first, then make one bounded cloud attempt (4s) so
-shutdown cannot hang; a failure keeps local notes and retries on the next
-hide/quit, and the Settings "Back up now" button can sync on demand. The cloud
-spinner stays visible for at least 600ms so a fast request is still noticeable.
+Syncing is event-driven and deliberately sparse: opening Jot only restores the
+saved session, and typing only autosaves locally. The cloud is contacted when
+Jot is hidden (Super+W) and when it quits, so a backup can never race the last
+word of a sentence. Hide and quit flush local notes first, then make one
+bounded cloud attempt (4s) so shutdown cannot hang; a failure keeps local notes
+and retries on the next hide/quit, and the Settings "Back up now" button can
+sync on demand. Notes written on another device arrive on the next hide/open
+cycle.
 
 Sync uses an append-only three-way merge. Each device keeps a 0600 base file
 with the last synced content/version. On sync: no base means all local text is

@@ -292,27 +292,6 @@ ApplicationWindow {
                                     function onCloudChanged() { cloudIcon.requestPaint() }
                                 }
                             }
-                            Loader {
-                                id: cloudSpinner
-                                objectName: "cloudSpinner"
-                                sourceComponent: window.spinnerComponent
-                                visible: backend.cloudSaving
-                                anchors.left: cloudIcon.right
-                                anchors.leftMargin: 3
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                            Label {
-                                id: cloudTick
-                                objectName: "cloudTick"
-                                anchors.left: cloudIcon.right
-                                anchors.leftMargin: 3
-                                anchors.verticalCenter: parent.verticalCenter
-                                visible: backend.cloudSaved && !backend.cloudSaving
-                                text: "✓"
-                                font.pixelSize: 11
-                                font.bold: true
-                                color: "#b59790"
-                            }
                         }
                     }
 
@@ -566,7 +545,7 @@ ApplicationWindow {
                         objectName: "settingsBody"
                         Layout.fillWidth: true
                         text: backend.cloudSignedIn
-                            ? qsTr("Signed in as %1. Notes stay on this device and are backed up to the cloud.")
+                            ? qsTr("Signed in as %1. Notes are backed up when you minimise or close Jot.")
                                 .arg(backend.cloudAccount)
                             : qsTr("Signed out — notes stay on this machine until you sign in.")
                         color: "#FAFCFB"

@@ -73,9 +73,6 @@ Backend::Backend(const QString &databasePath, QObject *parent)
     connect(m_cloudWorker, &CloudWorker::finished, this, &Backend::onCloudFinished);
     connect(m_cloudThread, &QThread::finished, m_cloudWorker, &QObject::deleteLater);
     m_cloudThread->start();
-    m_cloudSyncTimer.setSingleShot(true);
-    m_cloudSyncTimer.setInterval(0);
-    connect(&m_cloudSyncTimer, &QTimer::timeout, this, &Backend::startCloudSync);
     QTimer::singleShot(0, this, &Backend::loadCloudConfig);
 }
 
@@ -86,7 +83,15 @@ QString Backend::displayDate() const {
 Backend::~Backend() {
     if (m_cloudThread) {
         m_cloudThread->quit();
-        m_cloudThread->wait(3000);
+        // One request can still be in flight if the hide/quit budget expired;
+        // wait past the 10s network timeout so the thread is never destroyed
+        // while it is still running.
+        if (!m_cloudThread->wait(11000)) {
+            // Last resort: never destroy a running QThread. The process is
+            // exiting, so leaking the thread object is safer than crashing.
+            qWarning("cloud worker did not stop in time");
+            m_cloudThread->setParent(nullptr);
+        }
     }
     jot_core_close(m_pad);
 }
@@ -158,10 +163,6 @@ void Backend::beginCloudSaving() {
 
 void Backend::afterCloudSavingEnds() {
     emit cloudChanged();
-    if (m_cloudSyncPending) {
-        m_cloudSyncPending = false;
-        if (m_cloudSignedIn && !m_cloudSaving) m_cloudSyncTimer.start();
-    }
 }
 
 void Backend::endCloudSaving() {
@@ -217,10 +218,9 @@ bool Backend::syncBeforeHide() {
     while ((m_cloudTaskActive || m_cloudSaving) && remaining() > 0) {
         if (!waitForCloudEvent(remaining())) break;
     }
-    if (!m_cloudSaved && m_cloudSignedIn && !m_cloudTaskActive && !m_cloudSaving
-        && remaining() > 0) {
-        m_cloudSyncPending = false;
-        m_cloudSyncTimer.stop();
+    // Always contact the cloud on hide/quit so notes written on another device
+    // are picked up even when this device has nothing new to push.
+    if (m_cloudSignedIn && !m_cloudTaskActive && !m_cloudSaving && remaining() > 0) {
         startCloudSync();
         while (m_cloudTaskActive && remaining() > 0) {
             if (!waitForCloudEvent(remaining())) break;
@@ -268,18 +268,12 @@ void Backend::loadCloudConfig() {
         return;
     }
     beginCloudSaving();
-    m_cloudRequestContent = m_content;
     QMetaObject::invokeMethod(m_cloudWorker, "initialize", Qt::QueuedConnection,
-                              Q_ARG(QString, url), Q_ARG(QString, key),
-                              Q_ARG(QString, m_cloudRequestContent));
+                              Q_ARG(QString, url), Q_ARG(QString, key));
 }
 
 void Backend::startCloudSync() {
-    if (!m_cloudSignedIn) return;
-    if (m_cloudSaving) {
-        m_cloudSyncPending = true;
-        return;
-    }
+    if (!m_cloudSignedIn || m_cloudSaving) return;
     beginCloudSaving();
     m_cloudSaved = false;
     emit cloudChanged();
@@ -294,16 +288,10 @@ void Backend::onCloudFinished(const CloudResult &result) {
     case CloudResult::Initialize:
         m_cloudAccount = result.account;
         m_cloudSignedIn = result.signedIn;
-        m_cloudVersion = result.version;
         m_cloudStatus = result.ok
             ? (result.signedIn ? result.message : tr("Cloud backup is off"))
             : result.message;
-        m_cloudSaved = result.ok && result.signedIn && result.inSync
-            && m_content == m_cloudRequestContent;
-        if (result.ok && result.signedIn && !result.inSync) {
-            m_cloudSaved = false;
-            m_cloudSyncPending = true;
-        }
+        m_cloudSaved = false;
         break;
     case CloudResult::SignIn:
     case CloudResult::SignUp:
@@ -311,7 +299,6 @@ void Backend::onCloudFinished(const CloudResult &result) {
         m_cloudSignedIn = result.signedIn;
         m_cloudSaved = false;
         m_cloudStatus = result.message;
-        if (result.ok && result.signedIn) m_cloudSyncPending = true;
         break;
     case CloudResult::SignOut:
         m_cloudAccount.clear();
