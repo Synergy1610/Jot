@@ -338,6 +338,25 @@ void NativeTests::settingsClearAndUndo() {
         auto *close = root->findChild<QQuickItem *>("settingsClose");
         QVERIFY(close);
         QCOMPARE(close->property("implicitWidth").toInt(), 30);
+        auto *signIn = root->findChild<QQuickItem *>("cloudSignIn");
+        auto *signUp = root->findChild<QQuickItem *>("cloudSignUp");
+        auto *signOut = root->findChild<QQuickItem *>("cloudSignOut");
+        auto *help = root->findChild<QQuickItem *>("settingsHelp");
+        QVERIFY(signIn && signUp && signOut && help);
+        QVERIFY(QMetaObject::invokeMethod(help, "click"));
+        QVERIFY(popup->property("helpVisible").toBool());
+        const QByteArray helpShot = qgetenv("JOT_NATIVE_HELP_SCREENSHOT");
+        if (!helpShot.isEmpty()) {
+            auto *window = qobject_cast<QQuickWindow *>(root);
+            QVERIFY(window);
+            QMetaObject::invokeMethod(popup, "open");
+            QTest::qWait(100);
+            QVERIFY(window->grabWindow().save(QString::fromUtf8(helpShot)));
+        }
+        auto *helpFlick = root->findChild<QQuickItem *>("helpFlick");
+        QVERIFY(helpFlick);
+        QVERIFY(QMetaObject::invokeMethod(close, "click"));
+        QVERIFY(!popup->property("helpVisible").toBool());
         QCOMPARE(bodyFont.family(), QString("monospace"));
         QCOMPARE(bodyFont.pixelSize(), 13);
         QCOMPARE(body->property("color").value<QColor>(), QColor("#FAFCFB"));
@@ -597,7 +616,7 @@ void NativeTests::savingBadgeStates() {
     QCOMPARE(cloudBadgeItem->width(), 48);
     QCOMPARE(cloudBadgeItem->x(), localBadge->x() + localBadge->width() + 4);
     QCOMPARE(localTickItem->x(), monitor->x() + monitor->width() + 3);
-    QCOMPARE(cloudTickItem->x(), cloudIconItem->x() + cloudIconItem->width() + 18);
+    QCOMPARE(cloudTickItem->x(), cloudIconItem->x() + cloudIconItem->width() + 3);
 
     QVERIFY(backend.locallySaved());
     QVERIFY(!backend.saving());

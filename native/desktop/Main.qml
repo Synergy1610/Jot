@@ -272,7 +272,7 @@ ApplicationWindow {
                                 onPaint: {
                                     const ctx = getContext("2d")
                                     ctx.reset()
-                                    ctx.strokeStyle = "#584e51"
+                                    ctx.strokeStyle = backend.isCloudSignedIn() ? "#b59790" : "#584e51"
                                     ctx.lineWidth = 1.2
                                     ctx.beginPath()
                                     ctx.moveTo(4, 12)
@@ -281,6 +281,10 @@ ApplicationWindow {
                                     ctx.bezierCurveTo(15.5, 6, 15.5, 12, 12, 12)
                                     ctx.closePath()
                                     ctx.stroke()
+                                }
+                                Connections {
+                                    target: backend
+                                    function onCloudChanged() { cloudIcon.requestPaint() }
                                 }
                             }
                             Loader {
@@ -296,7 +300,7 @@ ApplicationWindow {
                                 id: cloudTick
                                 objectName: "cloudTick"
                                 anchors.left: cloudIcon.right
-                                anchors.leftMargin: 18
+                                anchors.leftMargin: 3
                                 anchors.verticalCenter: parent.verticalCenter
                                 visible: backend.cloudSaved
                                 text: "✓"
@@ -441,6 +445,11 @@ ApplicationWindow {
 
         property bool confirmClear: false
         property bool copied: false
+        property bool helpVisible: false
+        onHelpVisibleChanged: {
+            settingsFlick.contentY = 0
+            helpFlick.contentY = 0
+        }
         property string hotkeyStatus: backend.hotkey.status === qsTr("Looks configured")
             ? qsTr("Looks configured")
             : (backend.hotkey.status === qsTr("Not found") ? qsTr("Not found") : qsTr("Checking config…"))
@@ -458,9 +467,12 @@ ApplicationWindow {
         }
         onClosed: editor.forceActiveFocus()
 
-        contentItem: Flickable {
+        contentItem: Item {
+        Flickable {
             id: settingsFlick
             objectName: "settingsFlick"
+            visible: !settings.helpVisible
+            anchors.fill: parent
             clip: true
             contentWidth: width
             contentHeight: settingsColumn.implicitHeight
@@ -475,7 +487,7 @@ ApplicationWindow {
                     Layout.bottomMargin: 12
                     Text {
                         objectName: "settingsTitle"
-                        text: qsTr("Jot settings")
+                        text: settings.helpVisible ? qsTr("Jot help") : qsTr("Jot settings")
                         font.family: "monospace"
                         font.pixelSize: 17
                         font.bold: true
@@ -490,9 +502,9 @@ ApplicationWindow {
                         Layout.alignment: Qt.AlignVCenter
                         padding: 0
                         background: null
-                        onClicked: settings.close()
+                        onClicked: settings.helpVisible ? settings.helpVisible = false : settings.close()
                         contentItem: Text {
-                            text: "✕"
+                            text: settings.helpVisible ? "←" : "✕"
                             font.family: "monospace"
                             font.pixelSize: 17
                             color: closeButton.hovered ? "#b59790" : "#584e51"
@@ -512,11 +524,43 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     spacing: 4
                     Layout.bottomMargin: 12
-                    Text { objectName: "settingsAccountHeading"; text: qsTr("Account"); font.family: "monospace"; font.pixelSize: 15; font.bold: true; color: "#87a9b0" }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Text {
+                            objectName: "settingsAccountHeading"
+                            text: qsTr("Account")
+                            font.family: "monospace"
+                            font.pixelSize: 15
+                            font.bold: true
+                            color: "#87a9b0"
+                            Layout.fillWidth: true
+                        }
+                        ToolButton {
+                            id: helpButton
+                            objectName: "settingsHelp"
+                            implicitWidth: 28
+                            implicitHeight: 28
+                            Layout.alignment: Qt.AlignVCenter
+                            padding: 0
+                            hoverEnabled: true
+                            background: null
+                            Accessible.name: qsTr("Help")
+                            onClicked: settings.helpVisible = true
+                            contentItem: Text {
+                                text: "?"
+                                font.family: "monospace"
+                                font.pixelSize: 15
+                                font.bold: true
+                                color: helpButton.hovered ? "#b59790" : "#584e51"
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                        }
+                    }
                     Text {
                         objectName: "settingsBody"
                         Layout.fillWidth: true
-                        text: backend.cloudSignedIn
+                        text: backend.isCloudSignedIn()
                             ? qsTr("Signed in as %1. Notes stay on this device and are backed up to the cloud.")
                                 .arg(backend.cloudAccount)
                             : qsTr("Signed out — notes stay on this machine until you sign in.")
@@ -526,43 +570,61 @@ ApplicationWindow {
                         wrapMode: Text.WordWrap
                         lineHeight: 1.5
                     }
-                    TextField {
-                        id: cloudEmail
-                        objectName: "cloudEmail"
+                    RowLayout {
                         Layout.fillWidth: true
-                        placeholderText: qsTr("Email")
-                        placeholderTextColor: "#584e51"
-                        color: "#FAFCFB"
-                        font.family: "monospace"
-                        font.pixelSize: 13
-                        leftPadding: 8
-                        rightPadding: 8
-                        implicitHeight: 30
-                        background: Rectangle {
-                            color: "#000000"
-                            radius: 6
-                            border.width: 1
-                            border.color: "#584e51"
+                        spacing: 8
+                        Text {
+                            text: qsTr("Email")
+                            color: "#b59790"
+                            font.family: "monospace"
+                            font.pixelSize: 13
+                            Layout.preferredWidth: 60
+                        }
+                        TextField {
+                            id: cloudEmail
+                            objectName: "cloudEmail"
+                            Layout.fillWidth: true
+                            color: "#FAFCFB"
+                            font.family: "monospace"
+                            font.pixelSize: 13
+                            leftPadding: 8
+                            rightPadding: 8
+                            implicitHeight: 30
+                            background: Rectangle {
+                                color: "#000000"
+                                radius: 6
+                                border.width: 1
+                                border.color: "#584e51"
+                            }
                         }
                     }
-                    TextField {
-                        id: cloudPassword
-                        objectName: "cloudPassword"
+                    RowLayout {
                         Layout.fillWidth: true
-                        placeholderText: qsTr("Password")
-                        placeholderTextColor: "#584e51"
-                        echoMode: TextInput.Password
-                        color: "#FAFCFB"
-                        font.family: "monospace"
-                        font.pixelSize: 13
-                        leftPadding: 8
-                        rightPadding: 8
-                        implicitHeight: 30
-                        background: Rectangle {
-                            color: "#000000"
-                            radius: 6
-                            border.width: 1
-                            border.color: "#584e51"
+                        spacing: 8
+                        Text {
+                            text: qsTr("Password")
+                            color: "#b59790"
+                            font.family: "monospace"
+                            font.pixelSize: 13
+                            Layout.preferredWidth: 60
+                        }
+                        TextField {
+                            id: cloudPassword
+                            objectName: "cloudPassword"
+                            Layout.fillWidth: true
+                            echoMode: TextInput.Password
+                            color: "#FAFCFB"
+                            font.family: "monospace"
+                            font.pixelSize: 13
+                            leftPadding: 8
+                            rightPadding: 8
+                            implicitHeight: 30
+                            background: Rectangle {
+                                color: "#000000"
+                                radius: 6
+                                border.width: 1
+                                border.color: "#584e51"
+                            }
                         }
                     }
                     RowLayout {
@@ -571,6 +633,7 @@ ApplicationWindow {
                         Button {
                             id: signInButton
                             objectName: "cloudSignIn"
+                            visible: !backend.isCloudSignedIn()
                             implicitHeight: 34
                             Layout.alignment: Qt.AlignVCenter
                             leftPadding: 8; rightPadding: 8; topPadding: 4; bottomPadding: 4
@@ -591,6 +654,7 @@ ApplicationWindow {
                         Button {
                             id: signUpButton
                             objectName: "cloudSignUp"
+                            visible: !backend.isCloudSignedIn()
                             implicitHeight: 34
                             Layout.alignment: Qt.AlignVCenter
                             leftPadding: 8; rightPadding: 8; topPadding: 4; bottomPadding: 4
@@ -614,7 +678,7 @@ ApplicationWindow {
                             implicitHeight: 34
                             Layout.alignment: Qt.AlignVCenter
                             leftPadding: 8; rightPadding: 8; topPadding: 4; bottomPadding: 4
-                            visible: backend.cloudSignedIn
+                            visible: backend.isCloudSignedIn()
                             background: Rectangle {
                                 radius: 6; color: "#000000"; border.width: 1
                                 border.color: signOutButton.hovered ? "#87a9b0" : "#b59790"
@@ -632,7 +696,7 @@ ApplicationWindow {
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 8
-                        visible: backend.cloudSignedIn
+                        visible: backend.isCloudSignedIn()
                         Button {
                             id: syncButton
                             objectName: "cloudSync"
@@ -953,5 +1017,105 @@ ApplicationWindow {
                 }
             }
         }
+        Flickable {
+            id: helpFlick
+            objectName: "helpFlick"
+            visible: settings.helpVisible
+            anchors.fill: parent
+            clip: true
+            contentWidth: width
+            contentHeight: helpColumn.implicitHeight
+            ColumnLayout {
+                id: helpColumn
+                width: helpFlick.width
+                spacing: 12
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("1. Sign up first")
+                    color: "#87a9b0"
+                    font.family: "monospace"
+                    font.pixelSize: 15
+                    font.bold: true
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("Create an account with your email and password. If your project requires confirmation, confirm the email, then come back to Jot.")
+                    color: "#FAFCFB"
+                    font.family: "monospace"
+                    font.pixelSize: 13
+                    wrapMode: Text.WordWrap
+                    lineHeight: 1.5
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("2. Sign in")
+                    color: "#87a9b0"
+                    font.family: "monospace"
+                    font.pixelSize: 15
+                    font.bold: true
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("After signing up, use Sign in with the same email and password. Your notes stay local while signed out.")
+                    color: "#FAFCFB"
+                    font.family: "monospace"
+                    font.pixelSize: 13
+                    wrapMode: Text.WordWrap
+                    lineHeight: 1.5
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("3. Automatic backup")
+                    color: "#87a9b0"
+                    font.family: "monospace"
+                    font.pixelSize: 15
+                    font.bold: true
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("While signed in, each local save is backed up to the cloud. The cloud icon spins while uploading and shows a tick when the backup is done.")
+                    color: "#FAFCFB"
+                    font.family: "monospace"
+                    font.pixelSize: 13
+                    wrapMode: Text.WordWrap
+                    lineHeight: 1.5
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("4. Manual sync")
+                    color: "#87a9b0"
+                    font.family: "monospace"
+                    font.pixelSize: 15
+                    font.bold: true
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("Back up now pushes your current pad. Download pulls the cloud pad down, but refuses to overwrite unsaved local edits. If the cloud pad changed elsewhere, download it first.")
+                    color: "#FAFCFB"
+                    font.family: "monospace"
+                    font.pixelSize: 13
+                    wrapMode: Text.WordWrap
+                    lineHeight: 1.5
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("5. Sign out")
+                    color: "#87a9b0"
+                    font.family: "monospace"
+                    font.pixelSize: 15
+                    font.bold: true
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("Sign out stops cloud backup and removes your session from the keyring. Your notes remain on this device.")
+                    color: "#FAFCFB"
+                    font.family: "monospace"
+                    font.pixelSize: 13
+                    wrapMode: Text.WordWrap
+                    lineHeight: 1.5
+                }
+            }
+        }
+    }
     }
 }

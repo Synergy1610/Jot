@@ -143,8 +143,12 @@ The core signs in with email/password, stores the session in the OS keyring
 via `secret-tool` with a 0600 file fallback, refreshes tokens automatically,
 and uploads/downloads the pad with version-based conflict detection. Local
 saves continue to work while signed out and are backed up automatically when
-signed in. The settings Account section exposes sign in/up/out, back up now
-and download; the cloud badge spinner and tick use the real cloud state.
+signed in. The settings Account section puts labels beside the email/password
+fields, uses a `?` button to open a full-window help page, and shows only Sign
+out while signed in (Sign in/Sign up are hidden). It also exposes back up now
+and download. The cloud badge spinner and tick use the real cloud state, the
+icon uses the accent colour while signed in, and its tick sits the same 3px
+from the icon as the device badge.
 
 Live verification on a disposable test user: sign-in, download, conflict-safe
 upload, round-trip and sign-out all passed, and the keyring entry is removed

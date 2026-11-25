@@ -53,6 +53,7 @@ public:
     bool cloudSaving() const { return m_cloudSaving; }
     bool cloudSaved() const { return m_cloudSaved; }
     bool cloudSignedIn() const { return m_cloudSignedIn; }
+    Q_INVOKABLE bool isCloudSignedIn() const { return m_cloudSignedIn; }
     QString cloudAccount() const { return m_cloudAccount; }
     QString cloudStatus() const { return m_cloudStatus; }
     QString cloudTooltip() const {
