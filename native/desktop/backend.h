@@ -1,7 +1,10 @@
 #pragma once
 
 #include <QObject>
+#include <QThread>
 #include <functional>
+
+#include "cloud_worker.h"
 #include <QPointer>
 #include <QString>
 #include <QTimer>
@@ -106,7 +109,9 @@ private:
     void loadCloudConfig();
     void refreshCloudAccount();
     void finishCloud(bool ok, const QString &message);
-    void runCloudTask(const std::function<void()> &task);
+    void scheduleCloudSync();
+    void startCloudSync();
+    void onCloudFinished(const CloudResult &result);
     static QString takeError(char *error);
     JotCorePad *m_pad = nullptr;
     QString m_content;
@@ -124,6 +129,10 @@ private:
     qlonglong m_cloudVersion = 0;
     QString m_cloudAccount;
     QString m_cloudStatus;
+    QThread *m_cloudThread = nullptr;
+    CloudWorker *m_cloudWorker = nullptr;
+    QTimer m_cloudSyncTimer;
+    bool m_cloudSyncPending = false;
     QPointer<QTextDocument> m_document;
     Hotkey m_hotkey;
 };

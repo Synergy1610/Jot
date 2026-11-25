@@ -355,7 +355,9 @@ void NativeTests::settingsClearAndUndo() {
         }
         auto *helpFlick = root->findChild<QQuickItem *>("helpFlick");
         QVERIFY(helpFlick);
-        QVERIFY(QMetaObject::invokeMethod(close, "click"));
+        auto *back = root->findChild<QQuickItem *>("helpBack");
+        QVERIFY(back);
+        QVERIFY(QMetaObject::invokeMethod(back, "click"));
         QVERIFY(!popup->property("helpVisible").toBool());
         QCOMPARE(bodyFont.family(), QString("monospace"));
         QCOMPARE(bodyFont.pixelSize(), 13);

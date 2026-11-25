@@ -63,6 +63,17 @@ Backend::Backend(const QString &databasePath, QObject *parent)
     connect(&m_timer, &QTimer::timeout, this, &Backend::flush);
     setStatus(tr("Saved on this device"));
     refreshUndo();
+
+    qRegisterMetaType<CloudResult>("CloudResult");
+    m_cloudThread = new QThread(this);
+    m_cloudWorker = new CloudWorker;
+    m_cloudWorker->moveToThread(m_cloudThread);
+    connect(m_cloudWorker, &CloudWorker::finished, this, &Backend::onCloudFinished);
+    connect(m_cloudThread, &QThread::finished, m_cloudWorker, &QObject::deleteLater);
+    m_cloudThread->start();
+    m_cloudSyncTimer.setSingleShot(true);
+    m_cloudSyncTimer.setInterval(1500);
+    connect(&m_cloudSyncTimer, &QTimer::timeout, this, &Backend::startCloudSync);
     QTimer::singleShot(0, this, &Backend::loadCloudConfig);
 }
 
@@ -71,6 +82,10 @@ QString Backend::displayDate() const {
 }
 
 Backend::~Backend() {
+    if (m_cloudThread) {
+        m_cloudThread->quit();
+        m_cloudThread->wait(3000);
+    }
     jot_core_close(m_pad);
 }
 
@@ -126,19 +141,6 @@ bool Backend::migrateLegacy() {
     return true;
 }
 
-void Backend::runCloudTask(const std::function<void()> &task) {
-    if (m_cloudSaving) return;
-    m_cloudSaving = true;
-    m_cloudSaved = false;
-    emit cloudChanged();
-    // Let QML paint the spinner before a blocking network call.
-    QTimer::singleShot(0, this, [this, task] {
-        task();
-        m_cloudSaving = false;
-        emit cloudChanged();
-    });
-}
-
 void Backend::finishCloud(bool ok, const QString &message) {
     m_cloudStatus = message;
     m_cloudSaved = ok && m_cloudSignedIn;
@@ -173,102 +175,134 @@ void Backend::loadCloudConfig() {
         if (name == QStringLiteral("SUPABASE_ANON_KEY")) key = value;
     }
     file.close();
-    char *error = nullptr;
-    if (url.isEmpty() || key.isEmpty()
-        || !jot_cloud_configure(url.toUtf8().constData(), key.toUtf8().constData(), &error)) {
-        m_cloudStatus = error ? takeError(error) : tr("Cloud configuration is incomplete");
+    if (url.isEmpty() || key.isEmpty()) {
+        m_cloudStatus = tr("Cloud configuration is incomplete");
         emit cloudChanged();
         return;
     }
-    if (!jot_cloud_restore(&error)) {
-        m_cloudStatus = error ? takeError(error) : tr("Cloud backup is off");
-        emit cloudChanged();
+    m_cloudSaving = true;
+    emit cloudChanged();
+    QMetaObject::invokeMethod(m_cloudWorker, "initialize", Qt::QueuedConnection,
+                              Q_ARG(QString, url), Q_ARG(QString, key));
+}
+
+void Backend::scheduleCloudSync() {
+    if (!m_cloudSignedIn) return;
+    if (m_cloudSaving) {
+        m_cloudSyncPending = true;
         return;
     }
-    refreshCloudAccount();
-    if (!m_cloudSignedIn) {
-        m_cloudStatus = tr("Cloud backup is off");
+    m_cloudSyncTimer.start();
+}
+
+void Backend::startCloudSync() {
+    if (!m_cloudSignedIn) return;
+    if (m_cloudSaving) {
+        m_cloudSyncPending = true;
         return;
     }
-    char *content = nullptr;
-    char *updated = nullptr;
-    qlonglong version = 0;
-    if (jot_cloud_download(&content, &updated, &version, &error)) {
-        m_cloudVersion = version;
-        m_cloudSaved = true;
-        m_cloudStatus = tr("Backed up to the cloud");
-        if (content) jot_core_string_free(content);
-        if (updated) jot_core_string_free(updated);
-    } else {
-        m_cloudStatus = takeError(error);
+    m_cloudSaving = true;
+    m_cloudSaved = false;
+    emit cloudChanged();
+    QMetaObject::invokeMethod(m_cloudWorker, "sync", Qt::QueuedConnection,
+                              Q_ARG(QString, m_content), Q_ARG(qlonglong, m_cloudVersion));
+}
+
+void Backend::onCloudFinished(const CloudResult &result) {
+    m_cloudSaving = false;
+    switch (result.kind) {
+    case CloudResult::Initialize:
+        m_cloudAccount = result.account;
+        m_cloudSignedIn = result.signedIn;
+        m_cloudVersion = result.version;
+        m_cloudSaved = result.ok && result.signedIn;
+        m_cloudStatus = result.ok
+            ? (result.signedIn ? result.message : tr("Cloud backup is off"))
+            : result.message;
+        break;
+    case CloudResult::SignIn:
+    case CloudResult::SignUp:
+        m_cloudAccount = result.account;
+        m_cloudSignedIn = result.signedIn;
+        m_cloudSaved = result.ok && result.signedIn;
+        m_cloudStatus = result.message;
+        break;
+    case CloudResult::SignOut:
+        m_cloudAccount.clear();
+        m_cloudSignedIn = false;
+        m_cloudVersion = 0;
+        m_cloudSaved = false;
+        m_cloudStatus = result.message;
+        break;
+    case CloudResult::Sync:
+        if (result.ok) m_cloudVersion = result.version;
+        m_cloudSaved = result.ok;
+        m_cloudStatus = result.message;
+        break;
+    case CloudResult::Pull: {
+        bool applied = false;
+        if (result.ok && !result.content.isEmpty()) {
+            QTextDocument probe;
+            probe.setPlainText(result.content);
+            QString represented;
+            for (QTextBlock block = probe.begin(); block.isValid(); block = block.next()) {
+                if (block != probe.begin()) represented += QLatin1Char('\n');
+                represented += block.text();
+            }
+            if (represented == result.content) {
+                char *error = nullptr;
+                const QByteArray bytes = result.content.toUtf8();
+                if (jot_core_save(m_pad, m_saved.toUtf8().constData(), bytes.constData(), &error)) {
+                    m_timer.stop();
+                    m_saved = m_content = result.content;
+                    if (m_document) replaceDocument(result.content);
+                    emit contentChanged();
+                    applied = true;
+                } else {
+                    m_cloudStatus = takeError(error);
+                }
+            } else {
+                m_cloudStatus = tr("The cloud notes cannot be represented by this editor");
+            }
+        }
+        m_cloudVersion = applied ? result.version : m_cloudVersion;
+        m_cloudSaved = applied;
+        if (applied) m_cloudStatus = result.message;
+        break;
+    }
     }
     emit cloudChanged();
+    if (m_cloudSyncPending && result.kind == CloudResult::Sync) {
+        m_cloudSyncPending = false;
+        if (m_cloudSignedIn) m_cloudSyncTimer.start();
+    }
 }
 
 void Backend::cloudSignIn(const QString &email, const QString &password) {
-    const QString user = email, pass = password;
-    runCloudTask([this, user, pass] {
-        char *error = nullptr;
-        const QByteArray emailBytes = user.toUtf8();
-        const QByteArray passwordBytes = pass.toUtf8();
-        if (!jot_cloud_sign_in(emailBytes.constData(), passwordBytes.constData(), &error)) {
-            finishCloud(false, takeError(error));
-            return;
-        }
-        refreshCloudAccount();
-        finishCloud(true, tr("Signed in"));
-    });
+    if (m_cloudSaving) return;
+    m_cloudSaving = true;
+    emit cloudChanged();
+    QMetaObject::invokeMethod(m_cloudWorker, "signIn", Qt::QueuedConnection,
+                              Q_ARG(QString, email), Q_ARG(QString, password));
 }
 
 void Backend::cloudSignUp(const QString &email, const QString &password) {
-    const QString user = email, pass = password;
-    runCloudTask([this, user, pass] {
-        char *error = nullptr;
-        bool needsConfirmation = false;
-        const QByteArray emailBytes = user.toUtf8();
-        const QByteArray passwordBytes = pass.toUtf8();
-        if (!jot_cloud_sign_up(emailBytes.constData(), passwordBytes.constData(),
-                               &needsConfirmation, &error)) {
-            finishCloud(false, takeError(error));
-            return;
-        }
-        refreshCloudAccount();
-        finishCloud(true, needsConfirmation
-            ? tr("Check your email to confirm, then sign in")
-            : tr("Signed in"));
-    });
+    if (m_cloudSaving) return;
+    m_cloudSaving = true;
+    emit cloudChanged();
+    QMetaObject::invokeMethod(m_cloudWorker, "signUp", Qt::QueuedConnection,
+                              Q_ARG(QString, email), Q_ARG(QString, password));
 }
 
 void Backend::cloudSignOut() {
-    runCloudTask([this] {
-        char *error = nullptr;
-        if (!jot_cloud_sign_out(&error)) {
-            finishCloud(false, takeError(error));
-            return;
-        }
-        m_cloudVersion = 0;
-        refreshCloudAccount();
-        finishCloud(true, tr("Signed out"));
-    });
+    if (m_cloudSaving) return;
+    m_cloudSaving = true;
+    emit cloudChanged();
+    QMetaObject::invokeMethod(m_cloudWorker, "signOut", Qt::QueuedConnection);
 }
 
 void Backend::cloudSyncNow() {
-    if (!m_cloudSignedIn) {
-        finishCloud(false, tr("Sign in before backing up to the cloud"));
-        return;
-    }
-    const QString content = m_content;
-    runCloudTask([this, content] {
-        char *error = nullptr;
-        qlonglong version = 0;
-        const QByteArray bytes = content.toUtf8();
-        if (!jot_cloud_upload(bytes.constData(), m_cloudVersion, &version, &error)) {
-            finishCloud(false, takeError(error));
-            return;
-        }
-        m_cloudVersion = version;
-        finishCloud(true, tr("Backed up to the cloud"));
-    });
+    startCloudSync();
 }
 
 void Backend::cloudPull() {
@@ -276,45 +310,10 @@ void Backend::cloudPull() {
         finishCloud(false, tr("Sign in before downloading cloud notes"));
         return;
     }
-    runCloudTask([this] {
-        char *error = nullptr;
-        char *content = nullptr;
-        char *updated = nullptr;
-        qlonglong version = 0;
-        if (!jot_cloud_download(&content, &updated, &version, &error)) {
-            finishCloud(false, takeError(error));
-            return;
-        }
-        if (!content) {
-            finishCloud(true, tr("No cloud notes yet"));
-            return;
-        }
-        const QString text = QString::fromUtf8(content);
-        jot_core_string_free(content);
-        if (updated) jot_core_string_free(updated);
-        QTextDocument probe;
-        probe.setPlainText(text);
-        QString represented;
-        for (QTextBlock block = probe.begin(); block.isValid(); block = block.next()) {
-            if (block != probe.begin()) represented += QLatin1Char('\n');
-            represented += block.text();
-        }
-        if (represented != text) {
-            finishCloud(false, tr("The cloud notes cannot be represented by this editor"));
-            return;
-        }
-        const QByteArray bytes = text.toUtf8();
-        if (!jot_core_save(m_pad, m_saved.toUtf8().constData(), bytes.constData(), &error)) {
-            finishCloud(false, takeError(error));
-            return;
-        }
-        m_timer.stop();
-        m_saved = m_content = text;
-        if (m_document) replaceDocument(text);
-        emit contentChanged();
-        m_cloudVersion = version;
-        finishCloud(true, tr("Downloaded from the cloud"));
-    });
+    if (m_cloudSaving) return;
+    m_cloudSaving = true;
+    emit cloudChanged();
+    QMetaObject::invokeMethod(m_cloudWorker, "pull", Qt::QueuedConnection);
 }
 
 void Backend::edit(const QString &text) {
@@ -503,6 +502,6 @@ bool Backend::flush() {
     }
     m_saved = m_content;
     setStatus(tr("Saved on this device"));
-    if (m_cloudSignedIn) QTimer::singleShot(0, this, &Backend::cloudSyncNow);
+    scheduleCloudSync();
     return true;
 }

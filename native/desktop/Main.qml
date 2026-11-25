@@ -205,7 +205,7 @@ ApplicationWindow {
                                     const ctx = getContext("2d")
                                     ctx.reset()
                                     ctx.strokeStyle = backend.localError ? "#c38b7b"
-                                                      : (backend.locallySaved ? "#b59790" : "#584e51")
+                                                      : (backend.ready ? "#b59790" : "#584e51")
                                     ctx.lineWidth = 1.2
                                     ctx.strokeRect(1.5, 2.5, 12, 8)
                                     ctx.beginPath()
@@ -272,7 +272,7 @@ ApplicationWindow {
                                 onPaint: {
                                     const ctx = getContext("2d")
                                     ctx.reset()
-                                    ctx.strokeStyle = backend.isCloudSignedIn() ? "#b59790" : "#584e51"
+                                    ctx.strokeStyle = backend.cloudSignedIn ? "#b59790" : "#584e51"
                                     ctx.lineWidth = 1.2
                                     ctx.beginPath()
                                     ctx.moveTo(4, 12)
@@ -504,7 +504,7 @@ ApplicationWindow {
                         background: null
                         onClicked: settings.helpVisible ? settings.helpVisible = false : settings.close()
                         contentItem: Text {
-                            text: settings.helpVisible ? "←" : "✕"
+                            text: "✕"
                             font.family: "monospace"
                             font.pixelSize: 17
                             color: closeButton.hovered ? "#b59790" : "#584e51"
@@ -560,7 +560,7 @@ ApplicationWindow {
                     Text {
                         objectName: "settingsBody"
                         Layout.fillWidth: true
-                        text: backend.isCloudSignedIn()
+                        text: backend.cloudSignedIn
                             ? qsTr("Signed in as %1. Notes stay on this device and are backed up to the cloud.")
                                 .arg(backend.cloudAccount)
                             : qsTr("Signed out — notes stay on this machine until you sign in.")
@@ -633,7 +633,7 @@ ApplicationWindow {
                         Button {
                             id: signInButton
                             objectName: "cloudSignIn"
-                            visible: !backend.isCloudSignedIn()
+                            visible: !backend.cloudSignedIn
                             implicitHeight: 34
                             Layout.alignment: Qt.AlignVCenter
                             leftPadding: 8; rightPadding: 8; topPadding: 4; bottomPadding: 4
@@ -654,7 +654,7 @@ ApplicationWindow {
                         Button {
                             id: signUpButton
                             objectName: "cloudSignUp"
-                            visible: !backend.isCloudSignedIn()
+                            visible: !backend.cloudSignedIn
                             implicitHeight: 34
                             Layout.alignment: Qt.AlignVCenter
                             leftPadding: 8; rightPadding: 8; topPadding: 4; bottomPadding: 4
@@ -678,7 +678,7 @@ ApplicationWindow {
                             implicitHeight: 34
                             Layout.alignment: Qt.AlignVCenter
                             leftPadding: 8; rightPadding: 8; topPadding: 4; bottomPadding: 4
-                            visible: backend.isCloudSignedIn()
+                            visible: backend.cloudSignedIn
                             background: Rectangle {
                                 radius: 6; color: "#000000"; border.width: 1
                                 border.color: signOutButton.hovered ? "#87a9b0" : "#b59790"
@@ -696,7 +696,7 @@ ApplicationWindow {
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 8
-                        visible: backend.isCloudSignedIn()
+                        visible: backend.cloudSignedIn
                         Button {
                             id: syncButton
                             objectName: "cloudSync"
@@ -1029,6 +1029,27 @@ ApplicationWindow {
                 id: helpColumn
                 width: helpFlick.width
                 spacing: 12
+                Button {
+                    id: helpBack
+                    objectName: "helpBack"
+                    implicitHeight: 34
+                    Layout.alignment: Qt.AlignLeft
+                    leftPadding: 8; rightPadding: 8; topPadding: 4; bottomPadding: 4
+                    background: Rectangle {
+                        radius: 6
+                        color: "#000000"
+                        border.width: 1
+                        border.color: helpBack.hovered ? "#87a9b0" : "#b59790"
+                    }
+                    contentItem: Text {
+                        text: qsTr("← Back to settings")
+                        color: helpBack.hovered ? "#87a9b0" : "#FAFCFB"
+                        font.family: "monospace"
+                        font.pixelSize: 13
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    onClicked: settings.helpVisible = false
+                }
                 Text {
                     Layout.fillWidth: true
                     text: qsTr("1. Sign up first")

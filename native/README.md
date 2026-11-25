@@ -148,7 +148,13 @@ fields, uses a `?` button to open a full-window help page, and shows only Sign
 out while signed in (Sign in/Sign up are hidden). It also exposes back up now
 and download. The cloud badge spinner and tick use the real cloud state, the
 icon uses the accent colour while signed in, and its tick sits the same 3px
-from the icon as the device badge.
+from the icon as the device badge. The help page has a back button, and the
+device icon stays in the accent colour while saving — the spinner alone shows
+activity.
+
+Cloud work runs on a dedicated worker thread with a 10s network timeout, and
+automatic backups are debounced by 1.5s and coalesced, so typing never blocks
+on Supabase.
 
 Live verification on a disposable test user: sign-in, download, conflict-safe
 upload, round-trip and sign-out all passed, and the keyring entry is removed

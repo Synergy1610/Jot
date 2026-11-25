@@ -7,7 +7,8 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::sync::OnceLock;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Session {
@@ -78,6 +79,16 @@ fn rfc3339(seconds: i64) -> String {
         year, month, day, rem / 3600, (rem % 3600) / 60, rem % 60)
 }
 
+static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
+
+fn agent() -> &'static ureq::Agent {
+    AGENT.get_or_init(|| {
+        ureq::AgentBuilder::new()
+            .timeout(Duration::from_secs(10))
+            .build()
+    })
+}
+
 fn endpoint(url: &str, path: &str) -> String {
     format!("{}/{}", url.trim_end_matches('/'), path.trim_start_matches('/'))
 }
@@ -99,7 +110,7 @@ fn http_error(error: ureq::Error) -> String {
 }
 
 fn post_json(url: &str, anon_key: &str, token: Option<&str>, body: &Value) -> Result<Value, String> {
-    let mut request = ureq::post(url)
+    let mut request = agent().post(url)
         .set("apikey", anon_key)
         .set("Content-Type", "application/json");
     if let Some(token) = token {
@@ -112,7 +123,7 @@ fn post_json(url: &str, anon_key: &str, token: Option<&str>, body: &Value) -> Re
 }
 
 fn get_json(url: &str, anon_key: &str, token: &str) -> Result<Value, String> {
-    let response = ureq::get(url)
+    let response = agent().get(url)
         .set("apikey", anon_key)
         .set("Authorization", &format!("Bearer {token}"))
         .set("Accept", "application/json")
@@ -287,7 +298,7 @@ impl Cloud {
         let updated_at = rfc3339(now_unix());
         let result = if remote.is_none() {
             let url = endpoint(&self.url, "rest/v1/pads");
-            let request = ureq::post(&url)
+            let request = agent().post(&url)
                 .set("apikey", &self.anon_key)
                 .set("Authorization", &format!("Bearer {token}"))
                 .set("Content-Type", "application/json")
@@ -300,7 +311,7 @@ impl Cloud {
         } else {
             let url = endpoint(&self.url,
                 &format!("rest/v1/pads?user_id=eq.{user_id}&version=eq.{version}"));
-            let request = ureq::patch(&url)
+            let request = agent().patch(&url)
                 .set("apikey", &self.anon_key)
                 .set("Authorization", &format!("Bearer {token}"))
                 .set("Content-Type", "application/json")
