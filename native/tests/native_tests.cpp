@@ -1,4 +1,5 @@
 #include "../desktop/backend.h"
+#include "../desktop/hyprland_rule.h"
 #include "../desktop/placement.h"
 
 #include <QFileInfo>
@@ -40,6 +41,7 @@ private slots:
     void escapeSavesAndHides();
     void hotkeyHelpUsesDisposableConfig();
     void savingBadgeStates();
+    void startupRuleInstallsAndReportsFailure();
     void placementTargetsOnlyPrototypeAndCancelsWhenHidden();
     void fixedWindowHintsProtectFullscreenOnMap();
 };
@@ -664,6 +666,47 @@ void NativeTests::savingBadgeStates() {
     QCOMPARE(backend.localTooltip(), QString("Local save failed"));
 }
 
+void NativeTests::startupRuleInstallsAndReportsFailure() {
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString helperPath = dir.filePath("hyprctl");
+    const QString logPath = dir.filePath("rule-calls");
+    QFile helper(helperPath);
+    QVERIFY(helper.open(QIODevice::WriteOnly));
+    helper.write(
+        "#!/usr/bin/python3\n"
+        "import os, sys\n"
+        "with open(os.environ['JOT_TEST_HYPR_RULE_LOG'], 'a') as log:\n"
+        "    log.write(' '.join(sys.argv[1:]) + '\\n')\n"
+        "if os.environ.get('JOT_TEST_HYPR_RULE_FAIL') == '1':\n"
+        "    sys.stdout.write('rejected')\n"
+        "    sys.exit(3)\n"
+        "print('ok')\n");
+    helper.close();
+    QVERIFY(helper.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner));
+    qputenv("JOT_TEST_HYPR_RULE_LOG", logPath.toUtf8());
+    qputenv("JOT_TEST_HYPR_RULE_FAIL", "0");
+
+    QString error;
+    QVERIFY(installJotPlacementRule(helperPath, &error));
+    QVERIFY(error.isEmpty());
+    QFile log(logPath);
+    QVERIFY(log.open(QIODevice::ReadOnly));
+    const QByteArray calls = log.readAll();
+    log.close();
+    QVERIFY(calls.contains("eval "));
+    QVERIFY(calls.contains("jot-placement"));
+    QVERIFY(calls.contains("match={class='^jot$'}"));
+    QVERIFY(calls.contains("float=true"));
+    QVERIFY(calls.contains("(monitor_w-window_w-24) 24"));
+
+    qputenv("JOT_TEST_HYPR_RULE_FAIL", "1");
+    QVERIFY(!installJotPlacementRule(helperPath, &error));
+    QVERIFY(!error.isEmpty());
+    qunsetenv("JOT_TEST_HYPR_RULE_FAIL");
+    qunsetenv("JOT_TEST_HYPR_RULE_LOG");
+}
+
 void NativeTests::placementTargetsOnlyPrototypeAndCancelsWhenHidden() {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
@@ -679,7 +722,10 @@ void NativeTests::placementTargetsOnlyPrototypeAndCancelsWhenHidden() {
         "if sys.argv[1:] == ['-j', 'clients']:\n"
         "    mode = os.environ['JOT_TEST_HYPR_MODE']\n"
         "    name = 'jot' if mode == 'other' else 'jot-native-prototype'\n"
-        "    print(json.dumps([{'pid': int(os.environ['JOT_TEST_HYPR_PID']), 'class': name, 'mapped': True, 'floating': mode != 'tiled', 'size': [486, 353], 'fullscreen': 2 if mode == 'fullscreen' else 0}]))\n"
+        "    client = {'pid': int(os.environ['JOT_TEST_HYPR_PID']), 'class': name, 'mapped': True, 'floating': mode != 'tiled', 'size': [486, 353], 'fullscreen': 2 if mode == 'fullscreen' else 0}\n"
+        "    at = os.environ.get('JOT_TEST_HYPR_AT')\n"
+        "    if at: client['at'] = [int(v) for v in at.split(',')]\n"
+        "    print(json.dumps([client]))\n"
         "else:\n"
         "    print('ok')\n");
     helper.close();
@@ -750,6 +796,18 @@ void NativeTests::placementTargetsOnlyPrototypeAndCancelsWhenHidden() {
                      ? QByteArray("move,top,focus,cursor") : QByteArray());
     }
 
+    // If a startup rule already placed the window, no move is dispatched.
+    const QByteArray atValue = QByteArray::number(screen.x() + qMax(0, screen.width() - 486 - 24))
+        + "," + QByteArray::number(screen.y() + 24);
+    qputenv("JOT_TEST_HYPR_AT", atValue);
+    QVERIFY(QFile::remove(logPath));
+    window.hide();
+    window.show();
+    QTRY_VERIFY(contents().contains("eval "));
+    const QByteArray atCalls = contents();
+    QVERIFY(!atCalls.contains("window.move"));
+    QVERIFY(atCalls.contains("hl.dsp.focus"));
+    qunsetenv("JOT_TEST_HYPR_AT");
     window.hide();
     QVERIFY(QFile::remove(logPath));
     qputenv("JOT_TEST_HYPR_MODE", "other");

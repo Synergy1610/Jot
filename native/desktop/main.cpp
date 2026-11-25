@@ -1,4 +1,5 @@
 #include "backend.h"
+#include "hyprland_rule.h"
 #include "instance.h"
 #include "placement.h"
 #include "tray.h"
@@ -81,6 +82,20 @@ int main(int argc, char **argv) {
     parser.addOption({"backup-to", "Write a new verified SQLite backup and exit.", "path"});
     parser.addPositionalArgument("command", "show, hide, toggle, or quit (default: show).", "[command]");
     parser.process(app);
+    // The prototype keeps placement opt-in. The production build enables it
+    // by default after live-screen acceptance, with an explicit opt-out for
+    // unusual compositor setups.
+#ifdef JOT_PRODUCTION
+    const bool placementEnabled =
+        !qEnvironmentVariableIsSet("JOT_NATIVE_EXPERIMENTAL_PLACEMENT")
+        || qEnvironmentVariableIntValue("JOT_NATIVE_EXPERIMENTAL_PLACEMENT") != 0;
+#else
+    const bool placementEnabled =
+        qEnvironmentVariableIntValue("JOT_NATIVE_EXPERIMENTAL_PLACEMENT") == 1;
+#endif
+    const bool hyprland = placementEnabled
+        && !qEnvironmentVariableIsEmpty("HYPRLAND_INSTANCE_SIGNATURE")
+        && QGuiApplication::platformName().startsWith(QStringLiteral("wayland"));
     QString path = parser.value("db");
 #ifdef JOT_PRODUCTION
     if (path.isEmpty()) path = defaultDatabasePath();
@@ -211,6 +226,17 @@ int main(int argc, char **argv) {
         if (markerFile.open(QIODevice::WriteOnly)) markerFile.write("1\n");
     }
 #endif
+#ifdef JOT_PRODUCTION
+    // Install before the first map: on Wayland the compositor chooses the
+    // initial position, so a rule is the only way to avoid a visible jump
+    // from the centre to the top-right.
+    if (hyprland) {
+        QString ruleError;
+        if (!installJotPlacementRule(QStringLiteral("hyprctl"), &ruleError))
+            std::fprintf(stderr, "jot: %s; using runtime placement\n",
+                         qPrintable(ruleError));
+    }
+#endif
     backend.setStartHidden(parser.isSet("hidden"));
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("backend", &backend);
@@ -226,20 +252,6 @@ int main(int argc, char **argv) {
     }
     QWindow *window = qobject_cast<QWindow *>(engine.rootObjects().first());
     if (!window) return 1;
-    // The prototype keeps placement opt-in. The production build enables it
-    // by default after live-screen acceptance, with an explicit opt-out for
-    // unusual compositor setups.
-#ifdef JOT_PRODUCTION
-    const bool placementEnabled =
-        !qEnvironmentVariableIsSet("JOT_NATIVE_EXPERIMENTAL_PLACEMENT")
-        || qEnvironmentVariableIntValue("JOT_NATIVE_EXPERIMENTAL_PLACEMENT") != 0;
-#else
-    const bool placementEnabled =
-        qEnvironmentVariableIntValue("JOT_NATIVE_EXPERIMENTAL_PLACEMENT") == 1;
-#endif
-    const bool hyprland = placementEnabled
-        && !qEnvironmentVariableIsEmpty("HYPRLAND_INSTANCE_SIGNATURE")
-        && QGuiApplication::platformName().startsWith(QStringLiteral("wayland"));
     Placement placement(window, hyprland, QStringLiteral("hyprctl"), appName());
     QObject::connect(window, SIGNAL(summoned()), &placement, SLOT(summon()));
     if (window->isVisible()) placement.summon();

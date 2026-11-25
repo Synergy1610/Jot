@@ -137,6 +137,7 @@ void Placement::finished(int exitCode, QProcess::ExitStatus status) {
     bool fullscreen = false;
     bool floating = false;
     QSize compositorSize;
+    QPoint compositorAt;
     if (status == QProcess::NormalExit && exitCode == 0) {
         const auto clients = QJsonDocument::fromJson(output).array();
         for (const QJsonValue &value : clients) {
@@ -152,6 +153,9 @@ void Placement::finished(int exitCode, QProcess::ExitStatus status) {
                 const QJsonArray size = client.value(QStringLiteral("size")).toArray();
                 if (size.size() == 2)
                     compositorSize = QSize(size.at(0).toInt(), size.at(1).toInt());
+                const QJsonArray at = client.value(QStringLiteral("at")).toArray();
+                if (at.size() == 2)
+                    compositorAt = QPoint(at.at(0).toInt(), at.at(1).toInt());
                 break;
             }
         }
@@ -186,15 +190,22 @@ void Placement::finished(int exitCode, QProcess::ExitStatus status) {
     // immediately by the pointer still resting on another window.
     const int centerX = x + qMax(1, compositorSize.width() / 2);
     const int centerY = y + qMax(1, compositorSize.height() / 2);
-    const QString lua = QStringLiteral(
+    QString lua = QStringLiteral(
         "local w=hl.get_window('pid:%1'); "
         "if w and w.pid==%1 and w.class=='%2' and w.mapped "
-        "and not w.hidden and w.floating and w.fullscreen==0 then "
-        "hl.dispatch(hl.dsp.window.move({x=%3,y=%4,relative=false,window=w})); "
+        "and not w.hidden and w.floating and w.fullscreen==0 then ")
+        .arg(QCoreApplication::applicationPid()).arg(m_className);
+    // A startup window rule may already have placed the pad. Avoid a second
+    // move (and its visible jump) when the compositor reports the target spot.
+    if (compositorAt != QPoint(x, y)) {
+        lua += QStringLiteral(
+            "hl.dispatch(hl.dsp.window.move({x=%1,y=%2,relative=false,window=w})); ")
+            .arg(x).arg(y);
+    }
+    lua += QStringLiteral(
         "hl.dispatch(hl.dsp.window.alter_zorder({mode='top',window=w})); "
         "hl.dispatch(hl.dsp.focus({window=w})); "
-        "hl.dispatch(hl.dsp.cursor.move({x=%5,y=%6})) end")
-        .arg(QCoreApplication::applicationPid()).arg(m_className).arg(x).arg(y)
+        "hl.dispatch(hl.dsp.cursor.move({x=%1,y=%2})) end")
         .arg(centerX).arg(centerY);
     m_focusLua = lua;
     m_evaluating = true;

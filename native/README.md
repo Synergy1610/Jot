@@ -104,6 +104,14 @@ dbus-run-session --config-file=/home/soorya/Projects/jot/native/tests/private-db
 with a private runtime and bus. On this machine it measured 223.3 MiB PSS for
 Tauri (three processes) and 50.0 MiB PSS for native (one process), 77.6% less.
 
+The production build installs a named Hyprland window rule at startup so the
+pad is floated and placed at the top-right on its first map, avoiding the
+centre-to-corner jump. Runtime placement is kept as a fallback but skips the
+move when the compositor already reports the target position; focus retry and
+fullscreen guards are unchanged. Setting
+`JOT_NATIVE_EXPERIMENTAL_PLACEMENT=0` disables both the rule and runtime
+placement.
+
 Placement was accepted on the live screen with a disposable database:
 top-right logical placement at `(936, 24)` on a 1920x1200 monitor at 1.333
 scale, focus on 5/5 and 3/3 production show/hide cycles, and a temporary

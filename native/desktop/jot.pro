@@ -5,8 +5,8 @@ TEMPLATE = app
 TARGET = jot
 DEFINES += JOT_PRODUCTION
 
-SOURCES += main.cpp backend.cpp hotkey.cpp instance.cpp placement.cpp tray.cpp
-HEADERS += backend.h hotkey.h instance.h placement.h tray.h ../core/jot_core.h
+SOURCES += main.cpp backend.cpp hotkey.cpp hyprland_rule.cpp instance.cpp placement.cpp tray.cpp
+HEADERS += backend.h hotkey.h hyprland_rule.h instance.h placement.h tray.h ../core/jot_core.h
 RESOURCES += resources.qrc
 
 # The installed build always links the optimized core.
