@@ -44,6 +44,10 @@ fn session_file() -> PathBuf { config_dir().join("cloud-session.json") }
 fn account_file() -> PathBuf { config_dir().join("cloud-account") }
 
 fn write_private(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Could not create {}: {e}", parent.display()))?;
+    }
     let mut options = OpenOptions::new();
     options.write(true).create(true).truncate(true);
     #[cfg(unix)]

@@ -16,6 +16,7 @@
 #include <QQuickWindow>
 #include <QScreen>
 #include <QSqlDatabase>
+#include <QStandardPaths>
 #include <QSqlQuery>
 #include <QTemporaryDir>
 #include <QTextBlock>
@@ -42,6 +43,7 @@ private slots:
     void hotkeyHelpUsesDisposableConfig();
     void savingBadgeStates();
     void startupRuleInstallsAndReportsFailure();
+    void cloudSpinnerAppearsDuringSync();
     void placementTargetsOnlyPrototypeAndCancelsWhenHidden();
     void fixedWindowHintsProtectFullscreenOnMap();
 };
@@ -726,6 +728,45 @@ void NativeTests::startupRuleInstallsAndReportsFailure() {
     QVERIFY(!error.isEmpty());
     qunsetenv("JOT_TEST_HYPR_RULE_FAIL");
     qunsetenv("JOT_TEST_HYPR_RULE_LOG");
+}
+
+void NativeTests::cloudSpinnerAppearsDuringSync() {
+    if (qgetenv("JOT_TEST_CLOUD_LIVE") != "1")
+        QSKIP("set JOT_TEST_CLOUD_LIVE=1 and Supabase env vars for the live cloud test");
+    const QByteArray url = qgetenv("SUPABASE_URL");
+    const QByteArray key = qgetenv("SUPABASE_ANON_KEY");
+    const QByteArray email = qgetenv("JOT_TEST_EMAIL");
+    const QByteArray password = qgetenv("JOT_TEST_PASSWORD");
+    QVERIFY(!url.isEmpty() && !key.isEmpty() && !email.isEmpty() && !password.isEmpty());
+    char *error = nullptr;
+    QVERIFY(jot_cloud_configure(url.constData(), key.constData(), &error));
+    if (!jot_cloud_sign_in(email.constData(), password.constData(), &error))
+        qDebug("live sign-in failed: %s", error ? error : "unknown");
+    QVERIFY(error == nullptr);
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath("pad.db");
+    QVERIFY(createDatabase(path));
+    const QString configPath = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
+        + QStringLiteral("/jot");
+    QVERIFY(QDir().mkpath(configPath));
+    QFile config(configPath + QStringLiteral("/supabase.env"));
+    QVERIFY(config.open(QIODevice::WriteOnly | QIODevice::Text));
+    config.write("SUPABASE_URL=" + url + "\nSUPABASE_ANON_KEY=" + key + "\n");
+    config.close();
+    Backend backend(path);
+    QTRY_VERIFY_WITH_TIMEOUT(backend.cloudSignedIn(), 10000);
+
+    bool sawSaving = false;
+    connect(&backend, &Backend::cloudChanged, &backend, [&] {
+        if (backend.cloudSaving()) sawSaving = true;
+    });
+    backend.cloudSyncNow();
+    QTRY_VERIFY_WITH_TIMEOUT(sawSaving, 10000);
+    QTRY_VERIFY_WITH_TIMEOUT(!backend.cloudSaving(), 15000);
+    QVERIFY(backend.cloudSaved());
+    jot_cloud_sign_out(&error);
 }
 
 void NativeTests::placementTargetsOnlyPrototypeAndCancelsWhenHidden() {

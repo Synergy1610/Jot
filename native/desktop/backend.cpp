@@ -147,6 +147,26 @@ void Backend::finishCloud(bool ok, const QString &message) {
     emit cloudChanged();
 }
 
+void Backend::beginCloudSaving() {
+    m_cloudSaving = true;
+    m_cloudSavingElapsed.start();
+    emit cloudChanged();
+}
+
+void Backend::endCloudSaving() {
+    const qint64 elapsed = m_cloudSavingElapsed.elapsed();
+    const qint64 minimum = 600;
+    if (elapsed >= minimum) {
+        m_cloudSaving = false;
+        emit cloudChanged();
+        return;
+    }
+    QTimer::singleShot(static_cast<int>(minimum - elapsed), this, [this] {
+        m_cloudSaving = false;
+        emit cloudChanged();
+    });
+}
+
 void Backend::refreshCloudAccount() {
     char *account = jot_cloud_account();
     m_cloudAccount = account ? QString::fromUtf8(account) : QString();
@@ -180,8 +200,7 @@ void Backend::loadCloudConfig() {
         emit cloudChanged();
         return;
     }
-    m_cloudSaving = true;
-    emit cloudChanged();
+    beginCloudSaving();
     QMetaObject::invokeMethod(m_cloudWorker, "initialize", Qt::QueuedConnection,
                               Q_ARG(QString, url), Q_ARG(QString, key));
 }
@@ -201,7 +220,7 @@ void Backend::startCloudSync() {
         m_cloudSyncPending = true;
         return;
     }
-    m_cloudSaving = true;
+    beginCloudSaving();
     m_cloudSaved = false;
     emit cloudChanged();
     QMetaObject::invokeMethod(m_cloudWorker, "sync", Qt::QueuedConnection,
@@ -209,7 +228,7 @@ void Backend::startCloudSync() {
 }
 
 void Backend::onCloudFinished(const CloudResult &result) {
-    m_cloudSaving = false;
+    endCloudSaving();
     switch (result.kind) {
     case CloudResult::Initialize:
         m_cloudAccount = result.account;
@@ -280,24 +299,21 @@ void Backend::onCloudFinished(const CloudResult &result) {
 
 void Backend::cloudSignIn(const QString &email, const QString &password) {
     if (m_cloudSaving) return;
-    m_cloudSaving = true;
-    emit cloudChanged();
+    beginCloudSaving();
     QMetaObject::invokeMethod(m_cloudWorker, "signIn", Qt::QueuedConnection,
                               Q_ARG(QString, email), Q_ARG(QString, password));
 }
 
 void Backend::cloudSignUp(const QString &email, const QString &password) {
     if (m_cloudSaving) return;
-    m_cloudSaving = true;
-    emit cloudChanged();
+    beginCloudSaving();
     QMetaObject::invokeMethod(m_cloudWorker, "signUp", Qt::QueuedConnection,
                               Q_ARG(QString, email), Q_ARG(QString, password));
 }
 
 void Backend::cloudSignOut() {
     if (m_cloudSaving) return;
-    m_cloudSaving = true;
-    emit cloudChanged();
+    beginCloudSaving();
     QMetaObject::invokeMethod(m_cloudWorker, "signOut", Qt::QueuedConnection);
 }
 
@@ -311,8 +327,7 @@ void Backend::cloudPull() {
         return;
     }
     if (m_cloudSaving) return;
-    m_cloudSaving = true;
-    emit cloudChanged();
+    beginCloudSaving();
     QMetaObject::invokeMethod(m_cloudWorker, "pull", Qt::QueuedConnection);
 }
 

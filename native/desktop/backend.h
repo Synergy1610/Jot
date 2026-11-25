@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QElapsedTimer>
 #include <QObject>
 #include <QThread>
 #include <functional>
@@ -109,6 +110,8 @@ private:
     void loadCloudConfig();
     void refreshCloudAccount();
     void finishCloud(bool ok, const QString &message);
+    void beginCloudSaving();
+    void endCloudSaving();
     void scheduleCloudSync();
     void startCloudSync();
     void onCloudFinished(const CloudResult &result);
@@ -133,6 +136,7 @@ private:
     CloudWorker *m_cloudWorker = nullptr;
     QTimer m_cloudSyncTimer;
     bool m_cloudSyncPending = false;
+    QElapsedTimer m_cloudSavingElapsed;
     QPointer<QTextDocument> m_document;
     Hotkey m_hotkey;
 };

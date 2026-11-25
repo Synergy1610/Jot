@@ -154,7 +154,8 @@ activity.
 
 Cloud work runs on a dedicated worker thread with a 10s network timeout, and
 automatic backups are debounced by 1.5s and coalesced, so typing never blocks
-on Supabase.
+on Supabase. The cloud spinner stays visible for at least 600ms so a fast
+request is still noticeable.
 
 Live verification on a disposable test user: sign-in, download, conflict-safe
 upload, round-trip and sign-out all passed, and the keyring entry is removed
