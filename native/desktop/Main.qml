@@ -302,7 +302,7 @@ ApplicationWindow {
                                 anchors.left: cloudIcon.right
                                 anchors.leftMargin: 3
                                 anchors.verticalCenter: parent.verticalCenter
-                                visible: backend.cloudSaved
+                                visible: backend.cloudSaved && !backend.cloudSaving
                                 text: "✓"
                                 font.pixelSize: 11
                                 font.bold: true

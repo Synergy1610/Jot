@@ -64,6 +64,7 @@ public:
         if (m_cloudSaving) return tr("Backing up to the cloud…");
         if (!m_cloudSignedIn) return tr("Cloud backup is off — sign in to enable");
         if (m_cloudStatus.contains(tr("differ"), Qt::CaseInsensitive)
+            || m_cloudStatus.contains(tr("changed"), Qt::CaseInsensitive)
             || m_cloudStatus.contains(tr("failed"), Qt::CaseInsensitive)
             || m_cloudStatus.contains(tr("Could not"), Qt::CaseInsensitive))
             return tr("Cloud backup needs attention — see settings");
@@ -111,6 +112,7 @@ private:
     QString documentText() const;
     void refreshUndo();
     void replaceDocument(const QString &text);
+    bool applyCloudContent(const QString &text);
     void loadCloudConfig();
     void refreshCloudAccount();
     void finishCloud(bool ok, const QString &message);
@@ -141,6 +143,7 @@ private:
     CloudWorker *m_cloudWorker = nullptr;
     QTimer m_cloudSyncTimer;
     bool m_cloudSyncPending = false;
+    QString m_cloudRequestContent;
     QElapsedTimer m_cloudSavingElapsed;
     QPointer<QTextDocument> m_document;
     Hotkey m_hotkey;

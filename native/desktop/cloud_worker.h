@@ -10,6 +10,7 @@ struct CloudResult {
     QString message;
     QString account;
     bool signedIn = false;
+    bool inSync = false;
     qlonglong version = 0;
     QString content;
 };

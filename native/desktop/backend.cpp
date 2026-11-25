@@ -209,9 +209,10 @@ void Backend::loadCloudConfig() {
         return;
     }
     beginCloudSaving();
+    m_cloudRequestContent = m_content;
     QMetaObject::invokeMethod(m_cloudWorker, "initialize", Qt::QueuedConnection,
                               Q_ARG(QString, url), Q_ARG(QString, key),
-                              Q_ARG(QString, m_content));
+                              Q_ARG(QString, m_cloudRequestContent));
 }
 
 void Backend::scheduleCloudSync() {
@@ -232,100 +233,83 @@ void Backend::startCloudSync() {
     beginCloudSaving();
     m_cloudSaved = false;
     emit cloudChanged();
+    m_cloudRequestContent = m_content;
     QMetaObject::invokeMethod(m_cloudWorker, "sync", Qt::QueuedConnection,
-                              Q_ARG(QString, m_content), Q_ARG(qlonglong, m_cloudVersion));
+                              Q_ARG(QString, m_cloudRequestContent), Q_ARG(qlonglong, m_cloudVersion));
 }
 
 void Backend::onCloudFinished(const CloudResult &result) {
-    endCloudSaving();
     switch (result.kind) {
     case CloudResult::Initialize:
         m_cloudAccount = result.account;
         m_cloudSignedIn = result.signedIn;
         m_cloudVersion = result.version;
-        m_cloudSaved = result.ok && result.signedIn;
         m_cloudStatus = result.ok
             ? (result.signedIn ? result.message : tr("Cloud backup is off"))
             : result.message;
+        m_cloudSaved = result.ok && result.signedIn && result.inSync
+            && m_content == m_cloudRequestContent;
+        if (result.ok && result.signedIn && !result.inSync) {
+            m_cloudSaved = false;
+            m_cloudSyncPending = true;
+        }
         break;
     case CloudResult::SignIn:
     case CloudResult::SignUp:
         m_cloudAccount = result.account;
         m_cloudSignedIn = result.signedIn;
-        m_cloudSaved = result.ok && result.signedIn;
+        m_cloudSaved = false;
         m_cloudStatus = result.message;
+        if (result.ok && result.signedIn) m_cloudSyncPending = true;
         break;
     case CloudResult::SignOut:
         m_cloudAccount.clear();
         m_cloudSignedIn = false;
         m_cloudVersion = 0;
         m_cloudSaved = false;
+        m_cloudRequestContent.clear();
         m_cloudStatus = result.message;
         break;
     case CloudResult::Sync: {
-        bool applied = false;
-        if (result.ok && !result.content.isEmpty() && result.content != m_content) {
-            QTextDocument probe;
-            probe.setPlainText(result.content);
-            QString represented;
-            for (QTextBlock block = probe.begin(); block.isValid(); block = block.next()) {
-                if (block != probe.begin()) represented += QLatin1Char('\n');
-                represented += block.text();
-            }
-            if (represented == result.content) {
-                char *error = nullptr;
-                const QByteArray bytes = result.content.toUtf8();
-                if (jot_core_save(m_pad, m_saved.toUtf8().constData(), bytes.constData(), &error)) {
-                    m_timer.stop();
-                    m_saved = m_content = result.content;
-                    if (m_document) replaceDocument(result.content);
-                    emit contentChanged();
-                    applied = true;
-                } else {
-                    m_cloudStatus = takeError(error);
-                }
-            } else {
-                m_cloudStatus = tr("The merged notes cannot be represented by this editor");
-            }
+        if (!result.ok) {
+            m_cloudSaved = false;
+            m_cloudStatus = result.message;
+            break;
         }
-        if (result.ok) m_cloudVersion = result.version;
-        m_cloudSaved = result.ok && (applied || result.content.isEmpty() || result.content == m_content);
-        if (m_cloudStatus.isEmpty() || result.ok) m_cloudStatus = result.message;
+        m_cloudVersion = result.version;
+        if (m_content != m_cloudRequestContent) {
+            // The user kept typing while this upload was in flight. Applying
+            // the merged snapshot would delete that newer text, so leave the
+            // editor alone and let the next sync carry it.
+            m_cloudSaved = false;
+            m_cloudStatus = tr("Cloud updated while you were typing — syncing again…");
+            m_cloudSyncPending = true;
+            break;
+        }
+        const bool applied = result.content == m_content || applyCloudContent(result.content);
+        m_cloudSaved = applied;
+        if (applied) m_cloudStatus = result.message;
         break;
     }
     case CloudResult::Pull: {
-        bool applied = false;
-        if (result.ok && !result.content.isEmpty()) {
-            QTextDocument probe;
-            probe.setPlainText(result.content);
-            QString represented;
-            for (QTextBlock block = probe.begin(); block.isValid(); block = block.next()) {
-                if (block != probe.begin()) represented += QLatin1Char('\n');
-                represented += block.text();
-            }
-            if (represented == result.content) {
-                char *error = nullptr;
-                const QByteArray bytes = result.content.toUtf8();
-                if (jot_core_save(m_pad, m_saved.toUtf8().constData(), bytes.constData(), &error)) {
-                    m_timer.stop();
-                    m_saved = m_content = result.content;
-                    if (m_document) replaceDocument(result.content);
-                    emit contentChanged();
-                    applied = true;
-                } else {
-                    m_cloudStatus = takeError(error);
-                }
-            } else {
-                m_cloudStatus = tr("The cloud notes cannot be represented by this editor");
-            }
+        if (!result.ok) {
+            m_cloudSaved = false;
+            m_cloudStatus = result.message;
+            break;
         }
+        if (m_content != m_cloudRequestContent) {
+            m_cloudSaved = false;
+            m_cloudStatus = tr("Notes changed while downloading — nothing was replaced");
+            break;
+        }
+        const bool applied = applyCloudContent(result.content);
         m_cloudVersion = applied ? result.version : m_cloudVersion;
         m_cloudSaved = applied;
         if (applied) m_cloudStatus = result.message;
         break;
     }
     }
-    emit cloudChanged();
+    endCloudSaving();
 }
 
 void Backend::cloudSignIn(const QString &email, const QString &password) {
@@ -359,6 +343,7 @@ void Backend::cloudPull() {
     }
     if (m_cloudSaving) return;
     beginCloudSaving();
+    m_cloudRequestContent = m_content;
     QMetaObject::invokeMethod(m_cloudWorker, "pull", Qt::QueuedConnection);
 }
 
@@ -421,6 +406,46 @@ void Backend::replaceDocument(const QString &text) {
     cursor.select(QTextCursor::Document);
     cursor.insertText(text);
     cursor.endEditBlock();
+}
+
+// Replace the pad with cloud content without destroying edits the user just
+// typed: a merge only adds a prefix above the local text, so insert that
+// prefix instead of rewriting the whole document.
+bool Backend::applyCloudContent(const QString &text) {
+    if (text == m_content) return true;
+    QTextDocument probe;
+    probe.setPlainText(text);
+    QString represented;
+    for (QTextBlock block = probe.begin(); block.isValid(); block = block.next()) {
+        if (block != probe.begin()) represented += QLatin1Char('\n');
+        represented += block.text();
+    }
+    if (represented != text) {
+        m_cloudStatus = tr("The cloud notes cannot be represented by this editor");
+        return false;
+    }
+    char *error = nullptr;
+    if (!jot_core_save(m_pad, m_saved.toUtf8().constData(), text.toUtf8().constData(), &error)) {
+        m_cloudStatus = takeError(error);
+        return false;
+    }
+    m_timer.stop();
+    const QString previous = m_content;
+    m_saved = m_content = text;
+    if (m_document) {
+        if (text.endsWith(previous)) {
+            const QString prefix = text.left(text.size() - previous.size());
+            QTextCursor cursor(m_document);
+            cursor.beginEditBlock();
+            cursor.setPosition(0);
+            cursor.insertText(prefix);
+            cursor.endEditBlock();
+        } else {
+            replaceDocument(text);
+        }
+    }
+    emit contentChanged();
+    return true;
 }
 
 bool Backend::clearPad() {

@@ -41,7 +41,12 @@ void CloudWorker::initialize(const QString &url, const QString &key, const QStri
     if (jot_cloud_download(&content, &updated, &version, &error)) {
         result.ok = true;
         result.version = version;
-        result.message = QStringLiteral("Backed up to the cloud");
+        const QString remote = content ? QString::fromUtf8(content) : QString();
+        result.inSync = content != nullptr && remote == localContent;
+        result.message = result.inSync
+            ? QStringLiteral("Backed up to the cloud")
+            : (content ? QStringLiteral("Cloud notes differ — syncing")
+                       : QStringLiteral("Cloud backup pending — syncing"));
         const QByteArray localBytes = localContent.toUtf8();
         const char *remoteBytes = content ? content : nullptr;
         if (!jot_cloud_set_baseline(localBytes.constData(), remoteBytes, version, &error))

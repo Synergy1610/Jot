@@ -48,15 +48,22 @@ fn state_file() -> PathBuf { config_dir().join("cloud-state.json") }
 struct BaseState {
     content: String,
     version: i64,
+    #[serde(default)]
+    user_id: String,
 }
 
-fn load_base() -> Option<BaseState> {
+fn load_base(user_id: &str) -> Option<BaseState> {
     std::fs::read(state_file()).ok()
         .and_then(|bytes| serde_json::from_slice::<BaseState>(&bytes).ok())
+        // A state file from before accounts were tagged still belongs to the
+        // only account that could have written it.
+        .filter(|state| state.user_id.is_empty() || state.user_id == user_id)
 }
 
-fn save_base(state: &BaseState) -> Result<(), String> {
-    let json = serde_json::to_vec(state).map_err(|e| format!("Could not encode sync state: {e}"))?;
+fn save_base(user_id: &str, state: &BaseState) -> Result<(), String> {
+    let mut state = state.clone();
+    state.user_id = user_id.to_string();
+    let json = serde_json::to_vec(&state).map_err(|e| format!("Could not encode sync state: {e}"))?;
     write_private(&state_file(), &json)
 }
 
@@ -64,6 +71,57 @@ fn append_text(base: &str, extra: &str) -> String {
     if extra.is_empty() { return base.to_string(); }
     if base.is_empty() { return extra.to_string(); }
     format!("{}\n\n{}", base.trim_end_matches('\n'), extra.trim_start_matches('\n'))
+}
+
+/// Compare pads without letting a trailing newline look like an edit.
+fn without_trailing_newlines(text: &str) -> &str {
+    text.trim_end_matches(['\n', '\r'])
+}
+
+/// What a sync should do with one device's notes.
+#[derive(Debug, PartialEq)]
+enum SyncPlan {
+    Pull,
+    Upload(String),
+    Conflict,
+}
+
+/// Decide how local, base and remote relate. Only append-only local changes
+/// are merged automatically; anything that rewrote earlier text is a conflict.
+fn plan_sync(local: &str, base: Option<&str>, remote: &str) -> SyncPlan {
+    let local_key = without_trailing_newlines(local);
+    let remote_key = without_trailing_newlines(remote);
+
+    if let Some(base) = base.filter(|base| !base.is_empty()) {
+        let base_key = without_trailing_newlines(base);
+        if local_key == base_key {
+            return SyncPlan::Pull;
+        }
+        if remote_key == base_key {
+            return SyncPlan::Upload(local.to_string());
+        }
+        if let Some(delta) = local.strip_prefix(base) {
+            if delta.trim().is_empty() {
+                return SyncPlan::Pull;
+            }
+            return SyncPlan::Upload(append_text(remote, delta));
+        }
+        return SyncPlan::Conflict;
+    }
+
+    // No usable base. This is a fresh device or a signed-out pad, so treat
+    // all local text as local-only — but never append text the cloud already
+    // contains, or the same notes show up twice.
+    if local_key.is_empty() || local_key == remote_key {
+        return SyncPlan::Pull;
+    }
+    if local_key.starts_with(remote_key) {
+        return SyncPlan::Upload(local.to_string());
+    }
+    if remote_key.contains(local_key) {
+        return SyncPlan::Pull;
+    }
+    SyncPlan::Upload(append_text(remote, local))
 }
 
 fn write_private(path: &Path, bytes: &[u8]) -> Result<(), String> {
@@ -222,6 +280,8 @@ impl Cloud {
         }
         let _ = std::fs::remove_file(session_file());
         let _ = std::fs::remove_file(account_file());
+        // Signed-out devices keep no cloud baseline; the first sync after
+        // signing in re-establishes it without duplicating known text.
         let _ = std::fs::remove_file(state_file());
         let _ = Command::new("secret-tool")
             .args(["clear", "service", "jot"])
@@ -296,13 +356,15 @@ impl Cloud {
     /// two pads already match. Otherwise the whole local pad is treated as
     /// local-only content to append on the next sync.
     pub fn set_baseline_from_local(&self, local: &str, remote: Option<&CloudPad>) -> Result<(), String> {
-        if load_base().is_some() { return Ok(()); }
-        let content = match remote {
-            Some(pad) if pad.content == local => local.to_string(),
-            _ => String::new(),
-        };
-        let version = remote.map(|pad| pad.version).unwrap_or(0);
-        save_base(&BaseState { content, version })
+        let Some(session) = self.session.as_ref() else { return Ok(()) };
+        if load_base(&session.user_id).is_some() { return Ok(()); }
+        let Some(pad) = remote else { return Ok(()) };
+        if without_trailing_newlines(local) != without_trailing_newlines(&pad.content) {
+            return Ok(());
+        }
+        save_base(&session.user_id, &BaseState {
+            content: pad.content.clone(), version: pad.version, user_id: String::new(),
+        })
     }
 
     /// Three-way sync. Only automatic merge is appending local-only text at
@@ -310,34 +372,33 @@ impl Cloud {
     /// overwritten. Returns the pad that should become the local content.
     pub fn sync(&mut self, local: &str) -> Result<CloudPad, String> {
         let remote = self.download()?;
-        let base = load_base();
+        let user_id = self.session.as_ref().map(|session| session.user_id.clone())
+            .ok_or_else(|| "Not signed in".to_string())?;
         let Some(remote) = remote else {
             let pad = self.upload(local, 0)?;
-            save_base(&BaseState { content: local.to_string(), version: pad.version })?;
+            save_base(&user_id, &BaseState {
+                content: local.to_string(), version: pad.version, user_id: String::new(),
+            })?;
             return Ok(pad);
         };
-        let Some(base) = base else {
-            let merged = append_text(&remote.content, local);
-            let pad = self.upload(&merged, remote.version)?;
-            save_base(&BaseState { content: merged, version: pad.version })?;
-            return Ok(pad);
-        };
-        if local == base.content {
-            save_base(&BaseState { content: remote.content.clone(), version: remote.version })?;
-            return Ok(remote);
+        let base = load_base(&user_id).filter(|state| !state.content.is_empty());
+        match plan_sync(local, base.as_ref().map(|state| state.content.as_str()), &remote.content) {
+            SyncPlan::Pull => {
+                save_base(&user_id, &BaseState {
+                    content: remote.content.clone(), version: remote.version,
+                    user_id: String::new(),
+                })?;
+                Ok(remote)
+            }
+            SyncPlan::Upload(content) => {
+                let pad = self.upload(&content, remote.version)?;
+                save_base(&user_id, &BaseState {
+                    content, version: pad.version, user_id: String::new(),
+                })?;
+                Ok(pad)
+            }
+            SyncPlan::Conflict => Err("Local and cloud notes have both changed; nothing was overwritten. Download or back up manually after reviewing.".into()),
         }
-        if remote.content == base.content {
-            let pad = self.upload(local, base.version)?;
-            save_base(&BaseState { content: local.to_string(), version: pad.version })?;
-            return Ok(pad);
-        }
-        if let Some(delta) = local.strip_prefix(&base.content) {
-            let merged = append_text(&remote.content, delta);
-            let pad = self.upload(&merged, remote.version)?;
-            save_base(&BaseState { content: merged, version: pad.version })?;
-            return Ok(pad);
-        }
-        Err("Local and cloud notes have both changed; nothing was overwritten. Download or back up manually after reviewing.".into())
     }
 
     pub fn download(&mut self) -> Result<Option<CloudPad>, String> {
@@ -428,5 +489,47 @@ mod tests {
         assert_eq!(append_text("", "local only"), "local only");
         assert_eq!(append_text("cloud", ""), "cloud");
         assert_eq!(append_text("cloud\n\n", "\nphone"), "cloud\n\nphone");
+    }
+
+    #[test]
+    fn no_base_never_duplicates_known_text() {
+        // Re-signing in on the same device must not append its own notes again.
+        assert_eq!(plan_sync("same notes", None, "same notes"), SyncPlan::Pull);
+        assert_eq!(plan_sync("same notes\n", None, "same notes"), SyncPlan::Pull);
+        // The phone already has the laptop notes plus its own suffix.
+        assert_eq!(
+            plan_sync("laptop\n\nphone", None, "laptop"),
+            SyncPlan::Upload("laptop\n\nphone".into())
+        );
+        // Local notes are already part of a merged cloud pad.
+        assert_eq!(
+            plan_sync("phone", None, "laptop\n\nphone"),
+            SyncPlan::Pull
+        );
+    }
+
+    #[test]
+    fn no_base_appends_only_new_text() {
+        assert_eq!(
+            plan_sync("phone-only", None, "laptop-only"),
+            SyncPlan::Upload("laptop-only\n\nphone-only".into())
+        );
+    }
+
+    #[test]
+    fn base_distinguishes_pull_push_and_conflict() {
+        assert_eq!(plan_sync("base", Some("base"), "remote"), SyncPlan::Pull);
+        assert_eq!(
+            plan_sync("base changed", Some("base"), "base"),
+            SyncPlan::Upload("base changed".into())
+        );
+        assert_eq!(
+            plan_sync("base\n\nphone", Some("base"), "base\n\nlaptop"),
+            SyncPlan::Upload("base\n\nlaptop\n\nphone".into())
+        );
+        assert_eq!(
+            plan_sync("rewritten", Some("base"), "remote"),
+            SyncPlan::Conflict
+        );
     }
 }

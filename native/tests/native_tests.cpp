@@ -44,6 +44,7 @@ private slots:
     void savingBadgeStates();
     void startupRuleInstallsAndReportsFailure();
     void cloudSpinnerAppearsDuringSync();
+    void cloudTypingDuringSyncIsNotLost();
     void placementTargetsOnlyPrototypeAndCancelsWhenHidden();
     void fixedWindowHintsProtectFullscreenOnMap();
 };
@@ -766,6 +767,76 @@ void NativeTests::cloudSpinnerAppearsDuringSync() {
     QTRY_VERIFY_WITH_TIMEOUT(sawSaving, 10000);
     QTRY_VERIFY_WITH_TIMEOUT(!backend.cloudSaving(), 15000);
     QVERIFY(backend.cloudSaved());
+    jot_cloud_sign_out(&error);
+}
+
+void NativeTests::cloudTypingDuringSyncIsNotLost() {
+    if (qgetenv("JOT_TEST_CLOUD_LIVE") != "1")
+        QSKIP("set JOT_TEST_CLOUD_LIVE=1 and Supabase env vars for the live cloud test");
+    const QByteArray url = qgetenv("SUPABASE_URL");
+    const QByteArray key = qgetenv("SUPABASE_ANON_KEY");
+    const QByteArray email = qgetenv("JOT_TEST_EMAIL");
+    const QByteArray password = qgetenv("JOT_TEST_PASSWORD");
+    QVERIFY(!url.isEmpty() && !key.isEmpty() && !email.isEmpty() && !password.isEmpty());
+    char *error = nullptr;
+    QVERIFY(jot_cloud_configure(url.constData(), key.constData(), &error));
+    QVERIFY(jot_cloud_sign_in(email.constData(), password.constData(), &error));
+
+    const QString base = QStringLiteral("sync-race-base");
+    const QString typed = base + QStringLiteral("\n\ntyped during sync");
+    char *content = nullptr;
+    char *updated = nullptr;
+    qlonglong version = 0;
+    QVERIFY(jot_cloud_download(&content, &updated, &version, &error));
+    if (content) jot_core_string_free(content);
+    if (updated) jot_core_string_free(updated);
+    qlonglong newVersion = 0;
+    QVERIFY(jot_cloud_upload(base.toUtf8().constData(), version, &newVersion, &error));
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath("pad.db");
+    QVERIFY(createDatabase(path));
+    {
+        QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", QStringLiteral("race"));
+        db.setDatabaseName(path);
+        QVERIFY(db.open());
+        QSqlQuery query(db);
+        QVERIFY(query.prepare("UPDATE pad SET content = ?1 WHERE id = 1"));
+        query.addBindValue(base);
+        QVERIFY(query.exec());
+        db.close();
+    }
+    QSqlDatabase::removeDatabase(QStringLiteral("race"));
+
+    const QString configPath = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
+        + QStringLiteral("/jot");
+    QVERIFY(QDir().mkpath(configPath));
+    QFile config(configPath + QStringLiteral("/supabase.env"));
+    QVERIFY(config.open(QIODevice::WriteOnly | QIODevice::Text));
+    config.write("SUPABASE_URL=" + url + "\nSUPABASE_ANON_KEY=" + key + "\n");
+    config.close();
+
+    Backend backend(path);
+    QTRY_VERIFY_WITH_TIMEOUT(backend.cloudSignedIn(), 10000);
+    QTRY_VERIFY_WITH_TIMEOUT(!backend.cloudSaving(), 15000);
+    QTRY_VERIFY_WITH_TIMEOUT(backend.cloudSaved(), 15000);
+
+    backend.cloudSyncNow();
+    backend.edit(typed);
+    QTRY_VERIFY_WITH_TIMEOUT(!backend.cloudSaving(), 15000);
+    QCOMPARE(backend.content(), typed);
+    QTRY_VERIFY_WITH_TIMEOUT(backend.cloudSaved(), 20000);
+    QCOMPARE(backend.content(), typed);
+
+    content = nullptr;
+    updated = nullptr;
+    version = 0;
+    QVERIFY(jot_cloud_download(&content, &updated, &version, &error));
+    const QString remote = content ? QString::fromUtf8(content) : QString();
+    if (content) jot_core_string_free(content);
+    if (updated) jot_core_string_free(updated);
+    QCOMPARE(remote, typed);
     jot_cloud_sign_out(&error);
 }
 

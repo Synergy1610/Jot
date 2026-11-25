@@ -159,15 +159,20 @@ request is still noticeable.
 
 Sync uses an append-only three-way merge. Each device keeps a 0600 base file
 with the last synced content/version. On sync: no base means all local text is
-local-only and is appended below the cloud pad; local or cloud unchanged from
-the base means the other side is pulled or pushed; an append-only local change
-is appended to the cloud pad; both sides edited differently is a conflict and
-nothing is overwritten. After a merge the combined pad is applied locally so
-the user can review it.
+local-only and is appended below the cloud pad unless the cloud already
+contains it (a signed-out device cannot duplicate its own notes); local or
+cloud unchanged from the base means the other side is pulled or pushed; an
+append-only local change is appended to the cloud pad; both sides edited
+differently is a conflict and nothing is overwritten. After a merge the
+combined pad is applied locally so the user can review it, and only the newly
+added prefix is inserted so the caret and undo history survive. If an upload
+finishes while the user is still typing, its merged snapshot is not applied:
+the newer text is kept and another sync is queued.
 
 Live verification on a disposable test user: sign-in, download, conflict-safe
-upload, append-only merge, round-trip and sign-out all passed, and the keyring
-entry is removed on sign-out.
+upload, append-only merge, duplicate-free re-sign-in, typing during an upload,
+round-trip and sign-out all passed, and the keyring entry is removed on
+sign-out.
 
 ## Remaining work
 
