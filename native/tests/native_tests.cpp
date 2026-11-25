@@ -654,17 +654,22 @@ void NativeTests::savingBadgeStates() {
     auto *cloudBadgeItem = window->findChild<QQuickItem *>("cloudBadge");
     auto *monitor = window->findChild<QQuickItem *>("monitorIcon");
     auto *cloudIconItem = window->findChild<QQuickItem *>("cloudIcon");
+    auto *iconsItem = window->findChild<QQuickItem *>("statusIcons");
     auto *localTickItem = window->findChild<QQuickItem *>("localTick");
     auto *editor = window->findChild<QQuickItem *>("padEditor");
     auto *gear = window->findChild<QQuickItem *>("gearIcon");
     QVERIFY(editor && gear && localBadge && cloudBadgeItem && monitor && cloudIconItem
-            && localTickItem);
+            && localTickItem && iconsItem);
     QCOMPARE(gear->width(), 17);
     QCOMPARE(gear->height(), 17);
-    QCOMPARE(localBadge->width(), 36);
-    QCOMPARE(cloudBadgeItem->width(), 48);
+    QCOMPARE(localBadge->width(), 33);
+    QCOMPARE(cloudBadgeItem->width(), 21);
     QCOMPARE(cloudBadgeItem->x(), 0);
-    QCOMPARE(localBadge->x(), cloudBadgeItem->x() + cloudBadgeItem->width() + 4);
+    QCOMPARE(localBadge->x(), cloudBadgeItem->x() + cloudBadgeItem->width());
+    const qreal cloudIconRight = cloudIconItem->mapToItem(iconsItem, QPointF(0, 0)).x()
+        + cloudIconItem->width();
+    const qreal monitorLeft = monitor->mapToItem(iconsItem, QPointF(0, 0)).x();
+    QCOMPARE(monitorLeft - cloudIconRight, 3);
     QCOMPARE(localTickItem->x(), monitor->x() + monitor->width() + 3);
     QVERIFY(!window->findChild<QObject *>("cloudSpinner"));
     QVERIFY(!window->findChild<QObject *>("cloudTick"));

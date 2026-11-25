@@ -168,7 +168,7 @@ ApplicationWindow {
                 Item {
                     id: statusIcons
                     objectName: "statusIcons"
-                    Layout.preferredWidth: 88
+                    Layout.preferredWidth: 54
                     Layout.preferredHeight: 30
                     Layout.alignment: Qt.AlignVCenter
 
@@ -213,9 +213,8 @@ ApplicationWindow {
                         id: localBadge
                         objectName: "localBadge"
                         anchors.left: cloudBadge.right
-                        anchors.leftMargin: 4
                         anchors.verticalCenter: parent.verticalCenter
-                        width: 36
+                        width: 33
                         height: 30
                         padding: 0
                         hoverEnabled: true
@@ -232,7 +231,7 @@ ApplicationWindow {
                                 width: 15
                                 height: 15
                                 anchors.left: parent.left
-                                anchors.leftMargin: 6
+                                anchors.leftMargin: 3
                                 anchors.verticalCenter: parent.verticalCenter
                                 onPaint: {
                                     const ctx = getContext("2d")
@@ -282,7 +281,7 @@ ApplicationWindow {
                         objectName: "cloudBadge"
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
-                        width: 48
+                        width: 21
                         height: 30
                         padding: 0
                         hoverEnabled: true
