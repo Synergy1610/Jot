@@ -533,6 +533,16 @@ pub unsafe extern "C" fn jot_core_string_free(value: *mut c_char) {
 /// `jot_core_string_free`. Maintenance UI must keep local-first behavior:
 /// every failure is reported, never applied to the local pad.
 
+/// Point session/state storage at a private directory. Desktop leaves this
+/// unset and uses XDG paths; Android sets its app files directory at startup.
+#[no_mangle]
+pub unsafe extern "C" fn jot_core_set_config_dir(path: *const c_char) -> bool {
+    match input(path) {
+        Ok(value) => cloud::set_config_dir(value),
+        Err(_) => false,
+    }
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn jot_cloud_configure(
     url: *const c_char, anon_key: *const c_char, error: *mut *mut c_char,
@@ -589,6 +599,17 @@ pub unsafe extern "C" fn jot_cloud_set_baseline(
 #[no_mangle]
 pub unsafe extern "C" fn jot_cloud_is_signed_in() -> bool {
     with_cloud(|cloud| Ok(cloud.is_signed_in())).unwrap_or(false)
+}
+
+/// Content of the last successful sync, or null when this device has never
+/// synced this account. Android uses it to keep launch pulls from overwriting
+/// unsynced local edits.
+#[no_mangle]
+pub unsafe extern "C" fn jot_cloud_base_content() -> *mut c_char {
+    match with_cloud(|cloud| Ok(cloud.base_content())) {
+        Ok(Some(content)) => into_c_string(&content),
+        _ => ptr::null_mut(),
+    }
 }
 
 #[no_mangle]

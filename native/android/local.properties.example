@@ -1,0 +1,12 @@
+# Copy to local.properties (gitignored) and fill in.
+sdk.dir=/path/to/android-sdk
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+
+# Optional: release signing. Without these the release APK is signed with the
+# debug key, which is fine for personal sideloading but cannot update a build
+# signed with another key.
+# JOT_KEYSTORE=/absolute/path/to/jot-release.jks
+# JOT_KEYSTORE_PASSWORD=
+# JOT_KEY_ALIAS=jot
+# JOT_KEY_PASSWORD=

@@ -32,7 +32,21 @@ pub struct Cloud {
     session: Option<Session>,
 }
 
+/// Mobile shells have no XDG or HOME environment, so they set this once at
+/// startup to their private app directory.
+static CONFIG_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+pub fn set_config_dir(path: &str) -> bool {
+    if path.is_empty() { return false; }
+    let wanted = PathBuf::from(path);
+    match CONFIG_DIR.set(wanted.clone()) {
+        Ok(()) => true,
+        Err(_) => CONFIG_DIR.get() == Some(&wanted),
+    }
+}
+
 fn config_dir() -> PathBuf {
+    if let Some(dir) = CONFIG_DIR.get() { return dir.clone(); }
     let base = std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
@@ -240,6 +254,13 @@ impl Cloud {
     }
 
     pub fn is_signed_in(&self) -> bool { self.session.is_some() }
+
+    /// Last content this device successfully synced. Used by the Android shell
+    /// to decide whether a launch pull is safe.
+    pub fn base_content(&self) -> Option<String> {
+        let user_id = self.session.as_ref()?.user_id.clone();
+        load_base(&user_id).map(|state| state.content)
+    }
 
     pub fn account(&self) -> Option<&str> {
         self.session.as_ref().map(|s| s.email.as_str())
