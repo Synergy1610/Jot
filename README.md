@@ -1,81 +1,72 @@
 # Jot
 
-A summoned scratchpad: one keystroke brings up a small pad, type, one keystroke
-dismisses it. Notes save locally; cloud transfer is explicit.
+A scratchpad I can summon with one keystroke, type into, and dismiss with another.
 
-## V3 — final
+> **V3 is final.** I shipped it and I'm done with it. I cancelled the Windows build — I only needed this on my Linux machine and my phone.
 
-This is the finished V3. There is no Windows build: it was cancelled by the
-owner. Supported targets are:
+## What I built
 
-- **Linux desktop** — Qt 6 / QML app in `native/desktop`, built against the
-  shared Rust core in `native/core`. Installed as `jot` on this machine.
-- **Android** — Kotlin / Compose app in `native/android`. It does **not** use
-  the Rust core or NDK; it talks to Supabase directly through OkHttp. Sideload
-  APK only, published on the GitHub releases page.
+| Where | What it is |
+|---|---|
+| **Linux desktop** | A Qt 6 / QML pad in `native/desktop`, linked against the shared Rust core in `native/core`. This is the one I use every day. |
+| **Android** | A Kotlin / Compose app in `native/android`. I deliberately kept it free of JNI, Rust and the NDK — it talks to Supabase directly through OkHttp. |
+| **Windows** | Cancelled. I decided I didn't need it. |
 
-The desktop app keeps its original behaviour, including automatic cloud sync on
-hide/quit. The phone never syncs by itself: **Get latest** replaces the phone
-notes with the cloud copy, and **Back up now** replaces the cloud copy with the
-phone notes. Both ask before replacing a copy with unsaved changes.
+The desktop app keeps the behaviour I always had: it syncs to the cloud when I hide or close it. On the phone I wanted control, so nothing syncs by itself — I tap **Get latest** to pull the cloud copy down, or **Back up now** to push my phone notes up. Either way, I get a confirmation before one copy replaces another with unsaved text, and I never end up with dated duplicates.
 
-## Linux desktop
+## My Linux setup
 
-### Prerequisites
+I summon the pad with `Super + W`. In `~/.config/hypr/bindings.lua` I have:
 
-```
-sudo pacman -S qt6 qt6-quickcontrols2 qt6-dbus
+```lua
+o.bind("SUPER + W", "Jot scratchpad", "jot toggle")
 ```
 
-Rust (via `cargo`) is needed to build the shared core.
+Then I run `hyprctl reload config-only`. The pad floats at the top-right of whichever monitor has focus. Hyprland ignores the usual always-on-top request, so I register a window rule that floats the window and raises it whenever I summon it. Another window can still cover it until I summon it again — that's a Hyprland/Wayland limitation I worked around, not a bug in Jot.
 
-### Build and install
+I control the app from the command line too:
+
+```sh
+jot toggle   # show if hidden, hide if visible
+jot show
+jot hide
+jot quit
+```
+
+`jot --hidden` starts it without showing the window; I use that for autostart.
+
+### Building the desktop app
 
 ```sh
 cd native/core && cargo build --release
 cd ../desktop
 qmake6 jot.pro
 make -j4
-sudo install -m755 jot /usr/local/bin/jot   # or: install -Dm755 jot ~/.local/bin/jot
+install -Dm755 jot ~/.local/bin/jot
 ```
 
-The fixed pad window is 480×320. On a fractional-scaled monitor, Qt keeps the
-exact scale (`PassThrough`) so text stays sharp when the window moves between
-outputs with different DPI.
+The window is a fixed 480×320. I had to keep Qt's fractional-DPI scaling exact, otherwise the text looked fuzzy when I moved the window between my laptop screen (1.333×) and my external monitor (1×).
 
-### Hotkey (Hyprland)
+## My phone
 
-In `~/.config/hypr/bindings.lua`:
+I publish the APK on the [V3 release page](https://github.com/Synergy1610/Jot/releases/tag/v3.0.0) and sideload it:
 
-```lua
-o.bind("SUPER + W", "Jot scratchpad", "jot toggle")
+```sh
+adb install -r jot-android-3.0.0.apk
 ```
 
-Apply with `hyprctl reload config-only`. The pad appears top-right on the
-focused monitor. On Hyprland/Wayland the compositor ignores GTK's always-on-top
-request, so Jot registers a window rule that floats the pad and raises it on
-summon; another window can still cover it until you summon it again. On X11 the
-normal always-on-top setting applies.
+It's debug-signed, so future updates from me have to use the same key. I keep the build and signing details in [`native/android/README.md`](native/android/README.md).
 
-### CLI
+The phone saves my notes to a plain text file with atomic writes, so I never lose text to a half-finished write. It only touches the cloud when I ask it to, and the conflict prompts have saved me more than once.
+
+## Where I put things
 
 ```
-jot toggle  # show if hidden, hide if visible
-jot show
-jot hide
-jot quit
+native/core/      Rust core shared with the desktop app
+native/desktop/   Qt 6 / QML desktop app
+native/android/   Kotlin / Compose phone app
+docs/             The design spec and task history I worked from
+packaging/        The Arch package files
 ```
 
-`--hidden` starts the app without showing the window (used by autostart).
-
-## Android
-
-Build, signing, cloud config and sync rules are documented in
-[`native/android/README.md`](native/android/README.md). The release page hosts
-a ready-to-install APK; updates must use the same signing key as the installed
-build.
-
-## Docs
-
-See `docs/PROJECT_SPEC.md` for the approved design and `docs/PROJECT_PLAN.md`
-for the task history.
+I wrote up the approved design in `docs/PROJECT_SPEC.md` and the task history in `docs/PROJECT_PLAN.md`.
