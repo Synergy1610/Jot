@@ -20,17 +20,9 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Install SDK and NDK
+      - name: Install SDK
         run: |
-          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018"
-          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/27.2.12479018" >> "$GITHUB_ENV"
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-linux-android
-
-      - name: Install cargo-ndk
-        run: cargo install cargo-ndk --locked
+          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-35" "build-tools;35.0.0"
 
       - name: Version
         run: |
@@ -40,11 +32,6 @@ jobs:
             echo "JOT_VERSION=dev-${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
           fi
           echo "JOT_VERSION_CODE=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
-
-      - name: Build native library
-        run: |
-          chmod +x native/android/build-rust.sh
-          JOT_ABIS=arm64-v8a native/android/build-rust.sh
 
       - name: Decode signing key
         env:

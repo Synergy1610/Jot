@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -36,20 +37,20 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.jot.JotStore
 
 @Composable
 fun SettingsScreen(store: JotStore) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var confirmDownload by remember { mutableStateOf(false) }
+    var confirmClear by remember { mutableStateOf(false) }
 
     Column(
         Modifier
             .fillMaxSize()
             .background(JotColors.ink)
             .statusBarsPadding()
+            .navigationBarsPadding()
             .imePadding()
     ) {
         Row(
@@ -97,13 +98,12 @@ fun SettingsScreen(store: JotStore) {
                     onEmail = { email = it },
                     onPassword = { password = it },
                     onClearPassword = { password = "" },
-                    onDownload = { confirmDownload = true },
                 )
                 Spacer(Modifier.height(6.dp))
                 Section("Clear pad")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     JotButton("Clear notes", enabled = store.ready && store.content.isNotEmpty()) {
-                        store.clearPad()
+                        confirmClear = true
                     }
                     JotButton("Restore cleared", enabled = store.ready && store.canUndo) {
                         store.undoClear()
@@ -121,31 +121,37 @@ fun SettingsScreen(store: JotStore) {
         }
     }
 
-    if (confirmDownload) {
+    if (confirmClear) {
         AlertDialog(
-            onDismissRequest = { confirmDownload = false },
+            onDismissRequest = { confirmClear = false },
             containerColor = JotColors.panel,
-            title = { Text("Download cloud notes?", style = JotTitle) },
+            title = { Text("Clear all notes?", style = JotTitle) },
             text = {
+                val cloud = if (store.cloudSignedIn) {
+                    " and, if you tap Back up now, the cloud copy too."
+                } else {
+                    "."
+                }
                 Text(
-                    "This replaces the notes on this phone with the cloud copy. " +
-                        "Use Back up now instead if this phone has newer text.",
+                    "This empties the pad on this phone$cloud " +
+                        "One restore copy is kept here, so you can undo this once.",
                     style = JotBody,
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
-                    confirmDownload = false
-                    store.downloadNow()
-                }) { Text("Download", style = JotLabel) }
+                    confirmClear = false
+                    store.clearPad()
+                }) { Text("Clear notes", style = JotLabel) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmDownload = false }) {
+                TextButton(onClick = { confirmClear = false }) {
                     Text("Cancel", style = JotLabel)
                 }
             },
         )
     }
+
 }
 
 @Composable
@@ -156,18 +162,18 @@ private fun AccountSection(
     onEmail: (String) -> Unit,
     onPassword: (String) -> Unit,
     onClearPassword: () -> Unit,
-    onDownload: () -> Unit,
 ) {
     Section("Account")
     if (store.cloudSignedIn) {
         Text(
-            "Signed in as ${store.cloudAccount ?: ""}. Notes are backed up when you leave Jot.",
+            "Signed in as ${store.cloudAccount ?: ""}. Nothing syncs on its own. " +
+                "Get latest replaces the notes here; Back up now replaces the cloud copy.",
             style = JotBody,
             color = JotColors.text,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            JotButton("Back up now", enabled = !store.cloudBusy) { store.syncNow() }
-            JotButton("Download", enabled = !store.cloudBusy) { onDownload() }
+            JotButton("Get latest", enabled = !store.cloudBusy) { store.getLatest() }
+            JotButton("Back up now", enabled = !store.cloudBusy) { store.backUpNow() }
         }
         JotButton("Sign out", enabled = !store.cloudBusy) { store.signOut() }
     } else {
@@ -188,11 +194,12 @@ private fun AccountSection(
                 onClearPassword()
             }
         }
+        JotButton("Sign-in help") { store.helpOpen = true }
     }
     Text(
         store.cloudStatus,
         style = JotBody,
-        color = if (store.cloudError || store.conflict) JotColors.error else JotColors.dim,
+        color = if (store.cloudError) JotColors.error else JotColors.dim,
     )
 }
 
@@ -202,27 +209,36 @@ private fun HelpContent() {
     Text("Type as you would in any notes app. Enter ends the line with today's date tag.", style = JotBody)
     Section("Saving")
     Text(
-        "Notes save on this device as you type. Cloud backup runs when you leave Jot, " +
-            "and whenever you tap Back up now.",
+        "Notes save on this device as you type, whether or not you are signed in. " +
+            "Cloud backup never happens by itself on the phone — you decide when.",
         style = JotBody,
     )
-    Section("Conflicts")
+    Section("Cloud")
     Text(
-        "If this phone and another device both changed the notes, Jot reports it and " +
-            "never overwrites either copy. Download deliberately replaces this phone's " +
-            "notes with the cloud copy.",
+        "Get latest downloads the cloud copy and replaces the notes on this phone. " +
+            "Back up now uploads the notes on this phone and replaces the cloud copy. " +
+            "If the other copy has changes you have not saved elsewhere, Jot asks " +
+            "before replacing it. Your laptop keeps working the way it always has.",
         style = JotBody,
     )
     Section("Clearing")
     Text(
-        "Clear notes empties the pad but keeps a copy. Restore cleared brings the last " +
-            "cleared text back.",
+        "Clear notes empties the pad but keeps one restore copy. Restore cleared brings " +
+            "that text back. If you are signed in, tap Back up now afterwards to empty " +
+            "the cloud copy too.",
         style = JotBody,
     )
     Section("Signing in")
     Text(
-        "Use the same account as the desktop app. The anon key is built in; your " +
-            "password is only sent to Supabase.",
+        "Use the same email and password as your Jot account. If you just created " +
+            "an account, check your email for a confirmation link before signing in. " +
+            "Your password is sent securely to Supabase and is not stored by Jot.",
+        style = JotBody,
+    )
+    Text(
+        "If sign-in fails, check the email address and password, confirm the account " +
+            "if prompted, and try again with an internet connection. Your notes remain " +
+            "saved on this phone if cloud sign-in or backup is unavailable.",
         style = JotBody,
     )
 }
@@ -259,24 +275,3 @@ private fun JotField(
     }
 }
 
-@Composable
-private fun JotButton(label: String, enabled: Boolean = true, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .background(JotColors.field)
-            .border(1.dp, if (enabled) JotColors.dim else JotColors.field)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                enabled = enabled,
-                onClick = onClick,
-            )
-            .padding(horizontal = 12.dp, vertical = 7.dp),
-    ) {
-        Text(
-            label,
-            style = JotBody.copy(fontSize = 13.sp),
-            color = if (enabled) JotColors.accent else JotColors.dim,
-        )
-    }
-}

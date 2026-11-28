@@ -92,6 +92,15 @@ fn without_trailing_newlines(text: &str) -> &str {
     text.trim_end_matches(['\n', '\r'])
 }
 
+/// Note lines only: blank lines are formatting, not content.
+fn meaningful_lines(text: &str) -> Vec<&str> {
+    text.lines().map(str::trim).filter(|line| !line.is_empty()).collect()
+}
+
+fn is_prefix(short: &[&str], long: &[&str]) -> bool {
+    short.len() <= long.len() && short.iter().zip(long.iter()).all(|(a, b)| a == b)
+}
+
 /// What a sync should do with one device's notes.
 #[derive(Debug, PartialEq)]
 enum SyncPlan {
@@ -118,7 +127,29 @@ fn plan_sync(local: &str, base: Option<&str>, remote: &str) -> SyncPlan {
             if delta.trim().is_empty() {
                 return SyncPlan::Pull;
             }
+            // Don't append lines the cloud already has — that is how the same
+            // note ends up twice when both devices added it independently.
+            let delta_lines = meaningful_lines(delta);
+            let remote_lines = meaningful_lines(remote);
+            if !delta_lines.is_empty() && delta_lines.iter().all(|line| remote_lines.contains(line)) {
+                return SyncPlan::Pull;
+            }
             return SyncPlan::Upload(append_text(remote, delta));
+        }
+        // Both devices appended to the same base. If one side kept every note
+        // line from the other and added more, keep the superset instead of
+        // declaring a conflict. Blank-line formatting differences and a line
+        // the two devices independently added do not count as a rewrite.
+        let base_lines = meaningful_lines(base);
+        let local_lines = meaningful_lines(local);
+        let remote_lines = meaningful_lines(remote);
+        if is_prefix(&base_lines, &local_lines) && is_prefix(&base_lines, &remote_lines) {
+            if is_prefix(&remote_lines, &local_lines) {
+                return SyncPlan::Upload(local.to_string());
+            }
+            if is_prefix(&local_lines, &remote_lines) {
+                return SyncPlan::Pull;
+            }
         }
         return SyncPlan::Conflict;
     }
@@ -391,6 +422,17 @@ impl Cloud {
     /// Three-way sync. Only automatic merge is appending local-only text at
     /// the bottom of the cloud pad; conflicting edits are reported, never
     /// overwritten. Returns the pad that should become the local content.
+    /// Force the baseline to a snapshot that is now on this device. An
+    /// explicit download must do this, otherwise the stale base keeps every
+    /// later sync in a conflict loop.
+    pub fn set_base(&self, content: &str, version: i64) -> Result<(), String> {
+        let user_id = self.session.as_ref().map(|s| s.user_id.clone())
+            .ok_or_else(|| "Not signed in".to_string())?;
+        save_base(&user_id, &BaseState {
+            content: content.to_string(), version, user_id: String::new(),
+        })
+    }
+
     pub fn sync(&mut self, local: &str) -> Result<CloudPad, String> {
         let remote = self.download()?;
         let user_id = self.session.as_ref().map(|session| session.user_id.clone())
@@ -534,6 +576,26 @@ mod tests {
         assert_eq!(
             plan_sync("phone-only", None, "laptop-only"),
             SyncPlan::Upload("laptop-only\n\nphone-only".into())
+        );
+    }
+
+    #[test]
+    fn both_sides_appended_keeps_the_superset() {
+        let base = "base\n\nline\n";
+        let local = "base\nline\ntest 2\ntest 3\n";
+        let remote = "base\n\nline\ntest 2\n";
+        // The laptop kept every base line and added more than the cloud did.
+        assert_eq!(plan_sync(local, Some(base), remote), SyncPlan::Upload(local.into()));
+        // The reverse direction pulls the cloud copy.
+        assert_eq!(plan_sync(remote, Some(base), local), SyncPlan::Pull);
+    }
+
+    #[test]
+    fn divergent_appends_still_conflict() {
+        let base = "base\n\n";
+        assert_eq!(
+            plan_sync("base\nphone\n", Some(base), "base\n\nlaptop\n"),
+            SyncPlan::Conflict
         );
     }
 

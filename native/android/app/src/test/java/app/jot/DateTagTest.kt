@@ -54,4 +54,23 @@ class DateTagTest {
         assertNull(DateTag.enterIndex("abc", 1, 2, "a\nc", 2))
         assertNull(DateTag.enterIndex("abc", 0, 0, "xabc", 1))
     }
+
+    @Test
+    fun keyboardEnterDoesNotAddAnExtraBlankLine() {
+        val old = "abc"
+        val incoming = "abc\n"
+        val index = DateTag.enterIndex(old, 3, 3, incoming, 4)!!
+        val result = DateTag.apply(incoming, index, index, today)!!
+        assertEquals("abc  | 27 Nov 2026\n", result.text)
+        assertEquals(result.text.length, result.caret)
+    }
+
+    @Test
+    fun keyboardEnterOnTaggedLineDoesNotAddAnExtraBlankLine() {
+        val old = "abc  | 27 Nov 2026"
+        val incoming = "$old\n"
+        val index = DateTag.enterIndex(old, old.length, old.length, incoming, incoming.length)!!
+        val result = DateTag.apply(incoming, index, index, today)!!
+        assertEquals(incoming, result.text)
+    }
 }

@@ -52,7 +52,7 @@ Single user (the project owner). No public signup, no sharing, no collaborators.
 10. Plain text only. No formatting, attachments, titles, or metadata in the text.
 11. Every change is written to local storage within ~300ms. There is no save button and no dirty-state dialog.
 12. **Approved change (single continuous pad):** the pad is **one editable textarea** holding the entire log — there is no hidden archive and no separate read-only header. When a line is completed with Enter, a small inline date tag is appended to it (e.g. `Prepare for Hackathon.  · 20 Nov 2026`), so every line carries the date it was written. All days remain visible and editable together, so you can cross things out or rewrite them in place. Old divider-formatted logs are migrated once into this format, tagging each line with the date of the section it appeared under; no text is lost. The `tag_format` setting records that migration has run.
-13. The pad has a slim header showing the current date, a status indicator, and a gear icon that opens the settings panel.
+13. The pad has a slim header showing the current date, a status indicator, and a gear icon that opens the settings panel. On Android the header is a Material 3 top app bar, and a one-line bottom bar holds the sync status plus **Get latest** and **Back up now**; the bar hides while the keyboard is open.
 14. The header status is shown as two icon badges, not text: **computer + tick** for "saved on this device" and **cloud + tick** for "backed up to the cloud". Each has a hover tooltip explaining its meaning. In v1 the cloud badge is inactive with the tooltip "Cloud backup is off — sign in to enable"; it becomes active when M2 sync lands. Error and in-progress states are conveyed by the computer badge's colour/tick state and tooltip.
 
 ### 3.3 Settings panel
@@ -68,7 +68,7 @@ Single user (the project owner). No public signup, no sharing, no collaborators.
 16. The keybind is owned by the platform, and the settings panel must say so plainly rather than pretend otherwise.
 17. **Linux:** the panel explains that the binding lives in the compositor (Hyprland), shows the exact line to add, the `jot toggle` command it invokes, a **Copy** button for that line, and an **Open config** button that opens `~/.config/hypr/hyprland.conf` in the user's editor. Changes take effect after a Hyprland reload, with no app restart.
 18. **Linux:** the panel scans the Hyprland config for an existing `jot toggle` binding and reports **"Looks configured"** or **"Not found"**, so the user is never guessing.
-19. **Windows (v3):** in-app key capture is deferred. Until it exists, the panel shows the same manual-instructions fallback.
+19. **Windows:** cancelled by the owner. The in-app key-capture and packaging work is not planned; the Linux manual-instructions fallback is the only supported non-Linux path documented here.
 
 ### 3.5 Accounts
 
@@ -97,12 +97,12 @@ Single user (the project owner). No public signup, no sharing, no collaborators.
 
 ## 4. Out of scope for v1
 
-Multiple notes, search, tags, titles, rich text, images, note sharing, public signup, note version history, encryption at rest beyond what Supabase provides, Windows support, Android support, auto-update, Windows in-app key capture.
+Multiple notes, search, tags, titles, rich text, images, note sharing, public signup, note version history, encryption at rest beyond what Supabase provides, auto-update. Windows support and Windows in-app key capture (cancelled). Android support is delivered; see section 8.
 
 Deferred by version:
 
-- **v2:** Android app and cross-device sync semantics, including the conflict-resolution UX.
-- **v3:** Windows build, packaged and verified in a VM, including in-app key capture.
+- **v2 (shipped with V3):** Android app and cross-device sync semantics, including the conflict-resolution UX.
+- **v3: Windows — cancelled by the owner.** No build, packaging or in-app key capture will be produced.
 
 ## 5. Data model and integrations
 
@@ -154,13 +154,20 @@ Scaffold, window behaviour, Hyprland hotkey and CLI, tray, autostart, SQLite aut
 
 Supabase project, migration with RLS, sign in and sign out, sync engine with debounce and retry, status line, realtime wiring, RLS verification with a second account.
 
-### M3 — v2: Android and cross-device (later)
+### M3 — v2: Android and cross-device
 
-Android build, shared sync semantics, conflict-resolution UX decision.
+Android app in Kotlin/Compose over the same Rust core, shipped as a sideload
+APK attached to GitHub releases (no Play Store). Shares the desktop sync rules:
+local-first autosave and no network while typing. Cloud transfer is explicit:
+**Get latest** replaces the phone notes with the cloud copy, and **Back up
+now** replaces the cloud copy with the phone notes. Jot confirms before
+replacing either side when it has unsaved changes; nothing syncs in the
+background. Distribution, minimum version and configuration are documented in
+`native/android/README.md`.
 
-### M4 — v3: Windows (later)
+### M4 — v3: Windows (cancelled)
 
-Windows packaging verified in a VM, and in-app key capture.
+Cancelled by the owner. No Windows package or in-app key capture will be built. V3 is final with Linux desktop and Android only.
 
 ## 9. Acceptance criteria for v1
 
@@ -192,4 +199,4 @@ Windows packaging verified in a VM, and in-app key capture.
 
 ## 11. MVP summary
 
-A summoned, always-on-top single pad on Linux that autosaves locally, can back up to Supabase behind email login, and installs as an Arch package. Later versions add Android with cross-device sync, then Windows.
+A summoned, always-on-top single pad on Linux that autosaves locally, can back up to Supabase behind email login, and installs as an Arch package. V3 adds Android with explicit cross-device sync. Windows was considered for v3 but cancelled.

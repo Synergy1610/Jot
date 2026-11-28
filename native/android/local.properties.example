@@ -1,7 +1,8 @@
 # Copy to local.properties (gitignored) and fill in.
 sdk.dir=/path/to/android-sdk
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
+
+# Keep cloud config in secrets.properties so Android Studio can rewrite
+# local.properties without removing the Supabase settings.
 
 # Optional: release signing. Without these the release APK is signed with the
 # debug key, which is fine for personal sideloading but cannot update a build

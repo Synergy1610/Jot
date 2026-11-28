@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Fountain-pen nib: outer silhouette plus the slit/breather hole. -->
+    <path
+        android:fillColor="#0E0E0D"
+        android:fillType="evenOdd"
+        android:pathData="M57,27 L60,27 L62,31 L65,37 L66,39 L64,44 L63,47 L55,47 L52,40 L52,37 L55,31 Z M58,27 L60,27 L60,37 L61,38.5 L60,40 L58,40 L57,38.5 L58,37 Z" />
+    <!-- Nib collar. -->
+    <path
+        android:fillColor="#0E0E0D"
+        android:pathData="M54,50 L64,50 L65,51 L64,52 L54,52 L53,51 Z" />
+    <!-- J hook. -->
+    <path
+        android:fillColor="#0E0E0D"
+        android:pathData="M55,54 L64,54 L64,72 L63,75 L62,76 L61,77 L60,78 L59,79 L58,80 L57,81 L56,82 L43,82 L39,80 L36,76 L36,67 L45,67 L45,75 L55,75 Z" />
+</vector>

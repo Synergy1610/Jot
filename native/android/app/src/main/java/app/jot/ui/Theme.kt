@@ -6,8 +6,10 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.sp
+import app.jot.R
 
 object JotColors {
     val ink = Color(0xFF090809)
@@ -20,26 +22,29 @@ object JotColors {
     val field = Color(0xFF131112)
 }
 
+private val JotFontFamily = FontFamily(Font(R.font.jetbrains_mono))
+
 val JotBody = TextStyle(
-    fontFamily = FontFamily.Monospace,
-    fontSize = 13.sp,
-    lineHeight = 18.sp,
+    fontFamily = JotFontFamily,
+    fontSize = 15.sp,
+    lineHeight = 22.sp,
     color = JotColors.text,
 )
 
-val JotHeader = JotBody.copy(fontSize = 12.sp, color = JotColors.accent)
+val JotHeader = JotBody.copy(fontSize = 14.sp, lineHeight = 18.sp, color = JotColors.accent)
 
 val JotLabel = JotBody.copy(color = JotColors.accent)
 
 val JotHeading = TextStyle(
-    fontFamily = FontFamily.Monospace,
-    fontSize = 15.sp,
+    fontFamily = JotFontFamily,
+    fontSize = 14.sp,
     color = JotColors.tag,
 )
 
 val JotTitle = TextStyle(
-    fontFamily = FontFamily.Monospace,
-    fontSize = 17.sp,
+    fontFamily = JotFontFamily,
+    fontSize = 18.sp,
+    lineHeight = 22.sp,
     color = JotColors.text,
 )
 

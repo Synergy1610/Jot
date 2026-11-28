@@ -47,10 +47,13 @@ object DateTag {
         val lineStart = if (selectionStart == 0) 0 else text.lastIndexOf('\n', selectionStart - 1) + 1
         var lineEnd = text.indexOf('\n', selectionEnd)
         if (lineEnd < 0) lineEnd = text.length
+        // A soft keyboard has already inserted the newline that ends this line;
+        // consume it so we don't emit a second one (a stray blank line).
+        val afterLine = if (lineEnd < text.length && text[lineEnd] == '\n') lineEnd + 1 else lineEnd
 
         val line = text.substring(lineStart, lineEnd)
         if (existing.containsMatchIn(line)) {
-            val newText = text.substring(0, lineEnd) + "\n" + text.substring(lineEnd)
+            val newText = text.substring(0, lineEnd) + "\n" + text.substring(afterLine)
             return Result(newText, lineEnd + 1)
         }
 
@@ -61,7 +64,7 @@ object DateTag {
             trimmedEnd--
         }
         val insertion = "  | ${stamp.format(today)}\n"
-        val newText = text.substring(0, trimmedEnd) + insertion + text.substring(lineEnd)
+        val newText = text.substring(0, trimmedEnd) + insertion + text.substring(afterLine)
         return Result(newText, trimmedEnd + insertion.length)
     }
 }

@@ -67,6 +67,12 @@ int main(int argc, char **argv) {
             break;
         }
     }
+    // The laptop panel is 1.333x while an external monitor can be 1x. Qt's
+    // default rounding renders fractional scales at 1x and lets the compositor
+    // stretch the buffer, which makes QML text fuzzy after moving the window.
+    // Keep the exact scale so Qt re-rasterises for each output.
+    QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
+        Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
     QGuiApplication app(argc, argv);
     app.setApplicationName(appName());
     app.setDesktopFileName(appName());

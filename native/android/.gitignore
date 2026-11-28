@@ -2,6 +2,9 @@
 build/
 app/build/
 local.properties
+secrets.properties
+.idea/
+*.iml
 app/src/main/jniLibs/
 *.jks
 *.keystore

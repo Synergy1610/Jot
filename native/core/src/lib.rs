@@ -596,6 +596,23 @@ pub unsafe extern "C" fn jot_cloud_set_baseline(
     }
 }
 
+/// Force the baseline to a pad that is now on this device. Called after an
+/// explicit download so a stale base cannot keep syncing into a conflict.
+#[no_mangle]
+pub unsafe extern "C" fn jot_cloud_set_base(
+    content: *const c_char, version: i64, error: *mut *mut c_char,
+) -> bool {
+    if !error.is_null() { *error = ptr::null_mut(); }
+    let result = (|| {
+        let content = input(content)?.to_string();
+        with_cloud(|cloud| cloud.set_base(&content, version))
+    })();
+    match result {
+        Ok(()) => true,
+        Err(message) => { set_error(error, &message); false }
+    }
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn jot_cloud_is_signed_in() -> bool {
     with_cloud(|cloud| Ok(cloud.is_signed_in())).unwrap_or(false)

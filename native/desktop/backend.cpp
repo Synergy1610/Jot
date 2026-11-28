@@ -337,7 +337,18 @@ void Backend::onCloudFinished(const CloudResult &result) {
         const bool applied = applyCloudContent(result.content);
         m_cloudVersion = applied ? result.version : m_cloudVersion;
         m_cloudSaved = applied;
-        if (applied) m_cloudStatus = result.message;
+        if (applied) {
+            // Download is an explicit "this device now matches the cloud"
+            // action. Record it as the new base, otherwise the stale base
+            // makes every later sync report a conflict again.
+            char *error = nullptr;
+            const QByteArray bytes = result.content.toUtf8();
+            if (jot_cloud_set_base(bytes.constData(), result.version, &error)) {
+                m_cloudStatus = result.message;
+            } else {
+                m_cloudStatus = takeError(error);
+            }
+        }
         break;
     }
     }

@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.net.URI
 
 plugins {
     id("com.android.application")
@@ -11,8 +12,26 @@ val localProperties = Properties().apply {
     if (file.exists()) file.inputStream().use { load(it) }
 }
 
+val secretsProperties = Properties().apply {
+    val file = rootProject.file("secrets.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
 fun setting(name: String): String =
-    System.getenv(name) ?: localProperties.getProperty(name) ?: ""
+    System.getenv(name)
+        ?.takeIf { it.isNotBlank() }
+        ?: secretsProperties.getProperty(name)?.takeIf { it.isNotBlank() }
+        ?: localProperties.getProperty(name)?.takeIf { it.isNotBlank() }
+        ?: ""
+
+fun requiredSupabaseUrl(): String {
+    val value = setting("SUPABASE_URL").trim()
+    val parsed = runCatching { URI(value) }.getOrNull()
+    require(parsed != null && parsed.scheme == "https" && !parsed.host.isNullOrBlank()) {
+        "SUPABASE_URL must be an absolute https:// URL. Put it in secrets.properties."
+    }
+    return value
+}
 
 fun quoted(value: String): String =
     "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
@@ -28,7 +47,7 @@ android {
         versionCode = setting("JOT_VERSION_CODE").ifEmpty { "1" }.toInt()
         versionName = setting("JOT_VERSION").ifEmpty { "0.1.0" }
 
-        buildConfigField("String", "SUPABASE_URL", quoted(setting("SUPABASE_URL")))
+        buildConfigField("String", "SUPABASE_URL", quoted(requiredSupabaseUrl()))
         buildConfigField("String", "SUPABASE_ANON_KEY", quoted(setting("SUPABASE_ANON_KEY")))
     }
 
@@ -76,8 +95,8 @@ android {
     }
 
     packaging {
-        jniLibs {
-            useLegacyPackaging = false
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
 }
@@ -92,7 +111,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
-    implementation("androidx.work:work-runtime-ktx:2.10.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 

@@ -202,4 +202,4 @@ jot toggle | show | hide | quit
 - Top-right placement targets the focused monitor.
 - Placeholder palette is acceptable; final colours are later work.
 - The settings-panel config path correction (Lua instead of `hyprland.conf`) will be applied to the spec when T-008 is built.
-- Android (v2) and Windows (v3) are out of scope for this plan.
+- Android (v2) shipped with V3; Windows (v3) is cancelled and out of scope.
